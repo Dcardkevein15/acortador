@@ -17,19 +17,7 @@
   4) Control total: sin ShrtFly ni intermediarios.
   ═══════════════════════════════════════════════════════════
 -->
-<script>
-/* Códigos Adsterra para el DOMINIO DEL ACORTADOR */
-window.ADS = {
-  /* banner iframe 300×250 */
-  bannerKey: '825b6c261bcb7f937eaa5a427f5536d5',
-  bannerSrc: 'https://www.highrevenueformat.com/825b6c261bcb7f937eaa5a427f5536d5/invoke.js',
-  /* social bar */
-  socialSrc: 'https://pl31187643.profitableratecpmnetwork.com/160fa130587ee2c54605a09d7f6d332d/invoke.js',
-  socialContainer: '160fa130587ee2c54605a09d7f6d332d',
-  /* direct link de Adsterra */
-  directlink: 'https://www.profitableratecpmnetwork.com/ur6i54e1s9?key=2d22ac685695ac659c2f75c51c04b51f',
-};
-</script>
+<!-- los códigos de Adsterra van INLINE más abajo (necesario para que carguen) -->
 <style>
 :root{--bg:#0a0a0f;--bg2:#101018;--panel:#14141d;--line:#23233a;--ink:#f2f2f7;--dim:#8a8aa3;--acid:#d8ff3e}
 *{margin:0;padding:0;box-sizing:border-box}
@@ -96,7 +84,16 @@ body{background:radial-gradient(900px 400px at 80% -10%,rgba(124,58,237,.12),tra
     <div class="sub" id="sub">Un momento — *no cierres esta pestaña*</div>
 
     <!-- 🔝 los dos banners 300×250 de ARIBA -->
-    <div class="adfield" id="adTop"></div>
+    <div class="adfield">
+      <div class="ad"><span class="ad-label">ADS</span>
+        <script type="text/javascript">atOptions = { 'key' : '825b6c261bcb7f937eaa5a427f5536d5', 'format' : 'iframe', 'height' : 250, 'width' : 300, 'params' : {} };</script>
+        <script type="text/javascript" src="https://www.highrevenueformat.com/825b6c261bcb7f937eaa5a427f5536d5/invoke.js"></script>
+      </div>
+      <div class="ad"><span class="ad-label">ADS</span>
+        <script type="text/javascript">atOptions = { 'key' : '825b6c261bcb7f937eaa5a427f5536d5', 'format' : 'iframe', 'height' : 250, 'width' : 300, 'params' : {} };</script>
+        <script type="text/javascript" src="https://www.highrevenueformat.com/825b6c261bcb7f937eaa5a427f5536d5/invoke.js"></script>
+      </div>
+    </div>
 
     <!-- ⏱ la cuenta atrás -->
     <div class="status">
@@ -108,7 +105,15 @@ body{background:radial-gradient(900px 400px at 80% -10%,rgba(124,58,237,.12),tra
     <div class="link-note" id="lnk"></div>
 
     <!-- 🔻 los dos banners 300×250 de ABAJO -->
-    <div class="adfield" id="adBot"></div>
+    <div class="adfield">
+      <div class="ad"><span class="ad-label">ADS</span>
+        <script type="text/javascript">atOptions = { 'key' : '825b6c261bcb7f937eaa5a427f5536d5', 'format' : 'iframe', 'height' : 250, 'width' : 300, 'params' : {} };</script>
+        <script type="text/javascript" src="https://www.highrevenueformat.com/825b6c261bcb7f937eaa5a427f5536d5/invoke.js"></script>
+      </div>
+      <div class="ad"><span class="ad-label">ADS</span>
+        <iframe src="https://www.profitableratecpmnetwork.com/ur6i54e1s9?key=2d22ac685695ac659c2f75c51c04b51f" style="border:0;display:block;width:300px;height:250px" scrolling="no" frameborder="0"></iframe>
+      </div>
+    </div>
   </div>
 </div>
 
@@ -134,47 +139,6 @@ body{background:radial-gradient(900px 400px at 80% -10%,rgba(124,58,237,.12),tra
     ref.textContent = '→ ' + target;
   }
 
-  /* ── inyecta los 4 banners 300×250 de Adsterra ──
-     OJO: los scripts NO se ejecutan si los insertamos con innerHTML.
-     Hay que crearlos con document.createElement('script') para que carguen. */
-  function adSlot300(){
-    const d = document.createElement('div');
-    d.className = 'ad';
-    d.innerHTML = '<span class="ad-label">ADS</span>';
-    return d;
-  }
-  /* coloca el banner de Adsterra dentro del hueco */
-  function mountBanner(slot){
-    /* el script atOptions debe definirse ANTES que el invoke.js */
-    const conf = document.createElement('script');
-    conf.type = 'text/javascript';
-    conf.text = "atOptions = { 'key' : '" + ADS.bannerKey + "', 'format' : 'iframe', 'height' : 250, 'width' : 300, 'params' : {} };";
-    slot.appendChild(conf);
-    const lib = document.createElement('script');
-    lib.type = 'text/javascript';
-    lib.src = ADS.bannerSrc;
-    slot.appendChild(lib);
-  }
-  const top = document.getElementById('adTop');
-  const bot = document.getElementById('adBot');
-  /* 2 banners Adsterra arriba */
-  mountBanner(top.appendChild(adSlot300()));
-  mountBanner(top.appendChild(adSlot300()));
-  /* 1 banner + 1 direct-link iframe abajo */
-  mountBanner(bot.appendChild(adSlot300()));
-  const dl = adSlot300();
-  dl.innerHTML = '<span class="ad-label">ADS</span><iframe src="' + ADS.directlink + '" width="300" height="250" scrolling="no" frameborder="0" style="border:0;display:block;width:300px;height:250px"></iframe>';
-  bot.appendChild(dl);
-  /* la social bar de Adsterra (carga en segundo plano) */
-  const sbDiv = document.createElement('div');
-  sbDiv.id = 'container-' + ADS.socialContainer;
-  const sbScript = document.createElement('script');
-  sbScript.async = true;
-  sbScript.setAttribute('data-cfasync', 'false');
-  sbScript.src = ADS.socialSrc;
-  document.body.appendChild(sbDiv);
-  document.body.appendChild(sbScript);
-
   /* ── cuenta atrás + activación del botón ── */
   const cta = document.getElementById('ctaBtn');
   const ctEl = document.getElementById('ct');
@@ -194,5 +158,9 @@ body{background:radial-gradient(900px 400px at 80% -10%,rgba(124,58,237,.12),tra
   }, 1000);
 })();
 </script>
+
+<!-- 💬 Social bar de Adsterra (se despliega sola; el container lo exige el script) -->
+<div id="container-160fa130587ee2c54605a09d7f6d332d"></div>
+<script async="async" data-cfasync="false" src="https://pl31187643.profitableratecpmnetwork.com/160fa130587ee2c54605a09d7f6d332d/invoke.js"></script>
 </body>
 </html>
