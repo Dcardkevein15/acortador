@@ -208,6 +208,8 @@ body{
   }
   const q = new URLSearchParams(location.search);
   const target = decodeU(q.get('u') || '');
+  /* 👑 VIP: si la app principal me marca como administrador, paso directo sin anuncios */
+  const isVip = q.get('vip') === '1';
 
   const titleEl = document.getElementById('mainTitle');
   const subEl   = document.getElementById('mainSub');
@@ -252,6 +254,18 @@ body{
       }, 2500);
     }
   }, 2200);
+
+  /* 👑 VIP (administrador de la app): sin anuncios ni espera */
+  if (isVip) {
+    document.getElementById('abgate').hidden = true;
+    titleEl.textContent = 'Modo admin';
+    subEl.textContent = 'Pulsa para continuar — los anuncios están desactivados solo para ti.';
+    statue.innerHTML = '✔ <b>Enlace listo</b>';
+    goBtn.disabled = false;
+    goBtn.innerHTML = '<span class="arrow">▶</span> CONTINUAR';
+    goBtn.onclick = () => { window.location.replace(target); };
+    return;
+  }
 
   /* cuenta atrás de 3s + anillo llenándose */
   const total = 3;
