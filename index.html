@@ -226,34 +226,64 @@ body{
     return;
   }
 
-  /* ═══ ANTI-ADBLOCK ═══
-     Si los anuncios no cargaron (bloqueador de anuncios activado),
-     se bloquea el botón de continuar con un aviso en pantalla
-     hasta que el usuario lo desactive y recargue. */
+  /* ═══ ANTI-ADBLOCK — detección real por trampa ═══
+     Inserta un div usando clases que los bloqueadores ocultan
+     (adsbox, adsbygoogle, etc.). Si desaparece/oculta → hay AdBlock.
+     Solo así — nunca por "no cargó el banner" (eso sucede a veces
+     sin AdBlock, por red lenta).                                      */
   const abgate = document.getElementById('abgate');
-  let adsOk = false;
-  setTimeout(() => {
-    /* Comprueba si el primer slot (Adsterra) tiene contenido cargado */
-    const firstSlot = document.querySelector('.adslot');
-    adsOk = !!(firstSlot && (firstSlot.querySelector('iframe') || firstSlot.innerHTML.trim().length > 150));
+  let adsOk = true;
+
+  async function detectAdblock() {
+    /* la trampa: un div "fake de anuncio" invisible. uBlock/AdBlock lo esconden. */
+    const bait = document.createElement('div');
+    bait.className = 'adsbox adsbygoogle ads ad-banner ad-slot pub_300x250 pub_728x90 sponsor';
+    bait.style.cssText = 'position:absolute;left:-9999px;top:-9999px;width:1px;height:1px;overflow:hidden';
+    bait.innerHTML = '&nbsp;';
+    document.body.appendChild(bait);
+    /* damos ~450ms a que el bloqueador actúe sobre el bait */
+    await new Promise(r => setTimeout(r, 450));
+    const style = getComputedStyle(bait);
+    const blocked =
+      bait.offsetHeight === 0 ||
+      style.display === 'none' ||
+      style.visibility === 'hidden' ||
+      style.display === 'none' && bait.offsetWidth === 0;
+    bait.remove();
+    return blocked;
+  }
+
+  /* se lanza una vez al inicio; si detecta bloqueador → activa el gate */
+  (async () => {
+    adsOk = !(await detectAdblock());
     if (!adsOk) {
       abgate.hidden = false;
       goBtn.disabled = true;
-      titleEl.textContent = '⚠️ Bloqueador activado';
-      subEl.textContent = 'Para continuar, desactiva AdBlock y recarga la página.';
-      /* reintenta: recarga la página cada 3s hasta que aparezca el anuncio */
-      const watch = setInterval(() => {
-        const f = document.querySelector('.adslot');
-        if (f && (f.querySelector('iframe') || f.innerHTML.trim().length > 150)) {
-          clearInterval(watch);
-          abgate.hidden = true;
-          adsOk = true;
-          titleEl.textContent = 'Preparando descarga…';
-          subEl.textContent = 'Espera un momento mientras generamos tu enlace.';
-        }
-      }, 2500);
+      titleEl.textContent = '🛡 Bloqueador activado';
+      subEl.textContent = 'Para continuar, desactiva AdBlock y pulsa «Ya lo desactivé».';
     }
-  }, 2200);
+  })();
+
+  /* el botón «Ya lo desactivé» del overlay re-verifica de verdad antes de dejar pasar */
+  const abBtn = abgate && abgate.querySelector('.rel');
+  if (abBtn) {
+    abBtn.onclick = async ev => {
+      ev.preventDefault();
+      const still = await detectAdblock();
+      if (!still) {
+        abgate.hidden = true;
+        /* dejamos que la cuenta atrás y el botón sigan su curso si ya terminaron antes */
+        adsOk = true;
+        goBtn.disabled = false;
+        goBtn.style.pointerEvents = '';
+        titleEl.textContent = 'Preparando descarga…';
+        subEl.textContent = 'Listo. Pulsa «CONTINUAR».';
+        goBtn.innerHTML = '<span class="arrow">▶</span> CONTINUAR';
+      } else {
+        subEl.textContent = 'Aún detecto el bloqueador — comprueba que lo quitaste por completo.';
+      }
+    };
+  }
 
   /* 👑 VIP (administrador de la app): sin anuncios ni espera */
   if (isVip) {
