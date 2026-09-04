@@ -98,7 +98,7 @@ body{background:radial-gradient(900px 400px at 80% -10%,rgba(124,58,237,.12),tra
     </div>
 
     <button id="ctaBtn" disabled>⏳ Por favor espera…</button>
-    <div class="link-note" id="lnk"></div>
+    <div class="link-note" id="lnk" style="display:none"></div>
 
     <!-- 🔻 UN banner 300×250 distinto abajo (Direct link de Adsterra, no repetir) -->
     <div class="adfield">
@@ -123,28 +123,32 @@ body{background:radial-gradient(900px 400px at 80% -10%,rgba(124,58,237,.12),tra
   const q = new URLSearchParams(location.search);
   const target = decodeU(q.get('u') || '');
   const ref = document.getElementById('lnk');
+  /* el enlace real NUNCA se pinta en pantalla — solo se activa al final */
   if (!target) {
     document.getElementById('hd').textContent = 'Enlace no válido';
     document.getElementById('sub').textContent = 'Este enlace está dañado o incompleto.';
-    ref.textContent = '';
-  } else {
-    ref.textContent = '→ ' + target;
   }
 
-  /* ── cuenta atrás + activación del botón ── */
+  /* ── cuenta atrás de 3s + activación del botón ── */
   const cta = document.getElementById('ctaBtn');
   const ctEl = document.getElementById('ct');
-  let n = 5;
+  let n = 3;
   ctEl.textContent = n;
   const tick = setInterval(() => {
     n--;
     ctEl.textContent = Math.max(0, n);
-    if (n === 2) { document.getElementById('hd').textContent = '¡Casi listo!'; document.getElementById('sub').textContent = 'El enlace se abre en un clic.'; }
+    if (n === 1) {
+      document.getElementById('hd').textContent = '¡Casi listo!';
+      document.getElementById('sub').textContent = 'En un momento podrás continuar.';
+    }
     if (n <= 0) {
       clearInterval(tick);
       ctEl.textContent = '✔';
       cta.disabled = false;
-      cta.textContent = '▶ CONTINUAR A TU DESCARGA';
+      cta.textContent = '▶ CONTINUAR';
+      document.getElementById('sub').textContent = 'Toca el botón para abrir tu enlace.';
+      /* el contador desaparece y deja el botón limpio */
+      ctEl.parentElement.style.display = 'none';
       if (target) cta.onclick = () => { window.location.replace(target); };
     }
   }, 1000);
