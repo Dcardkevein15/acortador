@@ -47,6 +47,27 @@ body{
 .h-title{font:900 26px/1.15 'Archivo Black',Arial;letter-spacing:-.4px;margin-bottom:6px}
 .h-sub{color:var(--dim);font-size:13.5px;margin-bottom:20px}
 
+/* ══ overlay anti-adblock bloqueante ══ */
+#abgate{
+  position:fixed;inset:0;z-index:999;background:rgba(4,4,10,.97);
+  display:flex;align-items:center;justify-content:center;padding:20px;
+}
+#abgate .inner{
+  max-width:420px;text-align:center;background:var(--card);
+  border:1px solid var(--hot);border-radius:20px;padding:30px 24px;
+  box-shadow:0 0 0 6px rgba(255,46,99,.15), 0 30px 60px rgba(0,0,0,.6);
+}
+#abgate .ico{font-size:46px;margin-bottom:12px}
+#abgate h2{font:900 19px 'Archivo Black',Arial;margin-bottom:10px;color:var(--hot);letter-spacing:-.3px}
+#abgate p{color:var(--dim);font-size:13.5px;line-height:1.6;margin-bottom:16px}
+#abgate .steps{text-align:left;font-size:12.5px;color:var(--dim);margin:14px 0;line-height:2}
+#abgate .steps b{color:var(--acid)}
+#abgate .rel{
+  display:inline-block;padding:12px 22px;border-radius:12px;
+  background:var(--acid);color:#111;font-weight:800;font-size:13px;cursor:pointer;border:none;
+}
+#abgate .rel:hover{filter:brightness(1.07);transform:translateY(-1px)}
+
 /* ══ contador en anillo SVG ══ */
 .ring{width:118px;height:118px;position:relative;margin:0 auto 18px}
 .ring svg{width:118px;height:118px;transform:rotate(-90deg)}
@@ -96,6 +117,21 @@ body{
 </style>
 </head>
 <body>
+
+<!-- Anti-adblock: obliga a recargar con AdBlock desactivado para continuar -->
+<div id="abgate" hidden>
+  <div class="inner">
+    <div class="ico">🛡️</div>
+    <h2>Desbloquea los anuncios</h2>
+    <p>La descarga es gratuita porque la sufragan los anuncios. Sin ellos, no podemos continuar.</p>
+    <div class="steps">
+      1. Toca el <b>icono de tu bloqueador</b> (uBlock, AdBlock, Brave…)<br>
+      2. Elige <b>«Permitir en este sitio»</b><br>
+      3. Recarga y tu enlace aparecerá
+    </div>
+    <button class="rel" onclick="location.reload()">Ya lo desactivé — recargar</button>
+  </div>
+</div>
 
 <div class="wrap">
   <!-- marca mínima -->
@@ -188,6 +224,35 @@ body{
     return;
   }
 
+  /* ═══ ANTI-ADBLOCK ═══
+     Si los anuncios no cargaron (bloqueador de anuncios activado),
+     se bloquea el botón de continuar con un aviso en pantalla
+     hasta que el usuario lo desactive y recargue. */
+  const abgate = document.getElementById('abgate');
+  let adsOk = false;
+  setTimeout(() => {
+    /* Comprueba si el primer slot (Adsterra) tiene contenido cargado */
+    const firstSlot = document.querySelector('.adslot');
+    adsOk = !!(firstSlot && (firstSlot.querySelector('iframe') || firstSlot.innerHTML.trim().length > 150));
+    if (!adsOk) {
+      abgate.hidden = false;
+      goBtn.disabled = true;
+      titleEl.textContent = '⚠️ Bloqueador activado';
+      subEl.textContent = 'Para continuar, desactiva AdBlock y recarga la página.';
+      /* reintenta: recarga la página cada 3s hasta que aparezca el anuncio */
+      const watch = setInterval(() => {
+        const f = document.querySelector('.adslot');
+        if (f && (f.querySelector('iframe') || f.innerHTML.trim().length > 150)) {
+          clearInterval(watch);
+          abgate.hidden = true;
+          adsOk = true;
+          titleEl.textContent = 'Preparando descarga…';
+          subEl.textContent = 'Espera un momento mientras generamos tu enlace.';
+        }
+      }, 2500);
+    }
+  }, 2200);
+
   /* cuenta atrás de 3s + anillo llenándose */
   const total = 3;
   let n = total;
@@ -205,9 +270,15 @@ body{
       numEl.textContent = '✓';
       statue.innerHTML = '✔ <b>Enlace listo</b>';
       statue.style.color = 'var(--acid)';
-      goBtn.disabled = false;
-      goBtn.innerHTML = '<span class="arrow">▶</span> CONTINUAR';
-      goBtn.onclick = () => { window.location.replace(target); };
+      /* activamos el botón SOLO si los anuncios han cargado */
+      if (adsOk) {
+        goBtn.disabled = false;
+        goBtn.innerHTML = '<span class="arrow">▶</span> CONTINUAR';
+        goBtn.onclick = () => { window.location.replace(target); };
+      } else {
+        goBtn.disabled = true;
+        goBtn.innerHTML = '🔒 Desbloquea AdBlock para continuar';
+      }
     }
   }, 1000);
 })();
