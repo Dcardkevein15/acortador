@@ -196,13 +196,31 @@ body{
      Solo así — nunca por "no cargó el banner" (eso sucede a veces
      sin AdBlock, por red lenta).                                      */
   /* 👑 VIP (administrador de la app): sin espera extra */
+  /* ══ Función ÚNICA de apertura: externa (pestaña nueva), 1 sola vez ══ */
+  let abierto = false;
+  function openExt() {
+    if (abierto) return;
+    abierto = true;
+    /* «forma externa»: pestaña nueva al lado del acortador */
+    const w = window.open(target, '_blank', 'noopener');
+    if (!w) {
+      /* bloqueada → navegamos esta misma como último recurso */
+      window.location.replace(target);
+      return;
+    }
+    goBtn.disabled = true;
+    goBtn.style.pointerEvents = 'none';
+    numEl.textContent = '✓';
+    statue.innerHTML = '📤 <b>Abierto en otra pestaña</b>';
+  }
+
   if (isVip) {
     titleEl.textContent = 'Modo admin';
-    subEl.textContent = 'Pulsa para continuar — los anuncios están desactivados solo para ti.';
+    subEl.textContent = 'Pulsa para continuar — sin espera ni publicidad para ti.';
     statue.innerHTML = '✔ <b>Enlace listo</b>';
     goBtn.disabled = false;
     goBtn.innerHTML = '<span class="arrow">▶</span> CONTINUAR';
-    goBtn.onclick = () => { window.location.replace(target); };
+    goBtn.onclick = openExt;
     return;
   }
 
@@ -225,7 +243,7 @@ body{
       statue.style.color = 'var(--acid)';
       goBtn.disabled = false;
       goBtn.innerHTML = '<span class="arrow">▶</span> CONTINUAR';
-      goBtn.onclick = () => { window.location.replace(target); };
+      goBtn.onclick = openExt;
     }
   }, 1000);
 })();
