@@ -4,115 +4,165 @@
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
 <meta name="robots" content="noindex,nofollow">
-<title>X·STREAM · Preparando enlace…</title>
+<title>One moment, please…</title>
 <link rel="icon" type="image/svg+xml" href="../icon.svg">
-<!--
-  ═══════════════════════════════════════════════════════════
-  X·STREAM /z — ACORTADOR PROPIO CON TUS ANUNCIOS ADSTERRA
-  ──────────────────────────────────────────────────────────
-  1) Recibe la URL del video codificada en ?u=<base64url>
-  2) Muestra 4 banners 300×250 (dos arriba, dos abajo) con tu
-     código de Adsterra embebido.
-  3) Tras ~5 s activa el botón «CONTINUAR» que lleva al enlace.
-  4) Control total: sin ShrtFly ni intermediarios.
-  ═══════════════════════════════════════════════════════════
--->
-<!-- los códigos de Adsterra van INLINE más abajo (necesario para que carguen) -->
 <style>
-:root{--bg:#0a0a0f;--bg2:#101018;--panel:#14141d;--line:#23233a;--ink:#f2f2f7;--dim:#8a8aa3;--acid:#d8ff3e}
+/* ═══════════ XLINK — estilo terminológico premium ═══════════ */
+:root{
+  --bg:#07070d; --card:#0d0d18; --card2:#12121f;
+  --line:#1f1f33; --ink:#f4f4fb; --dim:#8f8fae; --acid:#d8ff3e; --hot:#ff2e63;
+}
 *{margin:0;padding:0;box-sizing:border-box}
 html,body{height:100%}
-body{background:radial-gradient(900px 400px at 80% -10%,rgba(124,58,237,.12),transparent 60%),var(--bg);color:var(--ink);font-family:'Inter',Arial,sans-serif;min-height:100vh;display:flex;align-items:center;justify-content:center;padding:22px}
-.wrap{width:min(720px,96vw);text-align:center}
-.logo{display:flex;align-items:center;justify-content:center;gap:10px;margin-bottom:6px}
-.logo-x{width:40px;height:40px;border-radius:12px;background:var(--acid);color:#111;font-weight:900;font-size:24px;display:grid;place-items:center}
-.logo-name{font-weight:900;font-size:15px;letter-spacing:3px;font-family:monospace}
-.logo-name em{font-style:normal;color:var(--dim);font-size:11px}
-
-.box{background:var(--panel);border:1px solid var(--line);border-radius:22px;padding:26px 24px 24px;box-shadow:0 26px 70px rgba(0,0,0,.5)}
-.head{font-size:21px;font-weight:900;margin-bottom:4px}
-.sub{color:var(--dim);font-size:13px;margin-bottom:16px}
-
-/* ══ la lluvia de dólares animada ══ */
-@keyframes fall{
-  0%{transform:translateY(-30px) rotate(0deg);opacity:0}
-  20%{opacity:1}
-  100%{transform:translateY(40px) rotate(18deg);opacity:0}
+body{
+  font-family:'Inter',system-ui,-apple-system,sans-serif;
+  background:
+    radial-gradient(1000px 500px at 85% -10%, rgba(216,255,62,.07), transparent 55%),
+    radial-gradient(700px 400px at -5% 110%, rgba(255,46,99,.08), transparent 55%),
+    var(--bg);
+  color:var(--ink); min-height:100vh;
+  display:flex; align-items:center; justify-content:center;
+  padding:18px;
 }
-.money{position:absolute;top:0;font-size:26px;animation:fall 1.8s ease-in infinite;pointer-events:none}
-.money.m1{left:8%;animation-delay:0s}
-.money.m2{left:30%;animation-delay:.55s}
-.money.m3{left:70%;animation-delay:.2s}
-.money.m4{left:88%;animation-delay:.9s}
 
-/* ══ los cuatro banners 300×250 ══ */
-.adfield{position:relative;display:flex;gap:14px;flex-wrap:wrap;justify-content:center;margin:14px 0}
-.ad{width:300px;height:250px;background:var(--bg2);border:1px solid var(--line);border-radius:10px;overflow:hidden;position:relative;flex:none}
-.ad-label{position:absolute;top:6px;right:8px;font:700 8px monospace;letter-spacing:1.4px;color:var(--dim);background:#0007;padding:2px 7px;border-radius:99px;z-index:3}
-.ad script,.ad iframe{display:block;border:0}
+/* barra de marca mínima */
+.brandbar{display:flex;align-items:center;gap:10px;margin-bottom:14px}
+.brand-x{width:38px;height:38px;border-radius:12px;background:var(--acid);color:#111;font:900 22px/1 'Archivo Black',Arial;display:grid;place-items:center}
+.brand-txt{font:800 13.5px/1 'JetBrains Mono',monospace;letter-spacing:2.5px}
+.brand-txt em{font-style:normal;color:var(--dim);font-weight:600;letter-spacing:1px;margin-left:6px}
 
-/* ══ la cuenta atrás y el botón ══ */
-.status{display:flex;align-items:center;justify-content:center;gap:12px;margin:16px 0 8px}
-.dot{width:12px;height:12px;border-radius:50%;background:var(--acid);animation:pb 1s infinite}
-.dot:nth-child(2){animation-delay:.18s}
-.dot:nth-child(3){animation-delay:.36s}
-@keyframes pb{50%{transform:scale(.4);opacity:.4}}
-#ct{font:900 34px monospace;color:var(--acid);letter-spacing:2px}
-#ctaBtn{
-  display:inline-flex;align-items:center;gap:10px;justify-content:center;
-  padding:16px 32px;border-radius:16px;border:none;cursor:pointer;
-  background:var(--acid);color:#111;font-weight:900;font-size:15px;
-  box-shadow:0 14px 34px rgba(216,255,62,.3);transition:transform .18s,opacity .3s;
-  animation:pulse 1.8s ease-in-out infinite;
+/* tarjeta principal */
+.card{
+  width:min(460px,100%);
+  background:linear-gradient(170deg,var(--card),var(--card2));
+  border:1px solid var(--line); border-radius:26px;
+  padding:34px 26px 28px; text-align:center;
+  box-shadow:0 30px 80px rgba(0,0,0,.6), 0 0 0 1px rgba(255,255,255,.02) inset;
+  animation:pep .7s cubic-bezier(.2,1.2,.3,1) both;
 }
-#ctaBtn:disabled{background:#2a2a3a;color:var(--dim);cursor:not-allowed;animation:none;box-shadow:none}
-#ctaBtn:hover:not(:disabled){transform:translateY(-2px) scale(1.02)}
-@keyframes pulse{50%{transform:scale(1.03)}}
-.link-note{color:var(--dim);font-size:11px;font-family:monospace;margin-top:10px}
+@keyframes pep{0%{transform:scale(.94);opacity:0}60%{transform:scale(1.015)}100%{transform:scale(1);opacity:1}}
+
+/* splash narrador */
+.eyebrow{font:700 10px 'JetBrains Mono',monospace;letter-spacing:2.6px;text-transform:uppercase;color:var(--acid);margin-bottom:8px}
+.h-title{font:900 26px/1.15 'Archivo Black',Arial;letter-spacing:-.4px;margin-bottom:6px}
+.h-sub{color:var(--dim);font-size:13.5px;margin-bottom:20px}
+
+/* ══ contador en anillo SVG ══ */
+.ring{width:118px;height:118px;position:relative;margin:0 auto 18px}
+.ring svg{width:118px;height:118px;transform:rotate(-90deg)}
+.ring .base{fill:none;stroke:var(--line);stroke-width:9}
+.ring .fill{fill:none;stroke:var(--acid);stroke-width:9;stroke-linecap:round;stroke-dasharray:314;stroke-dashoffset:0;transition:stroke-dashoffset 1s linear}
+.ring .num{
+  position:absolute;inset:0;display:grid;place-items:center;
+  font:900 30px 'JetBrains Mono',monospace;color:var(--acid);
+}
+
+/* texto de estado */
+.statue{font-size:12.5px;color:var(--dim);margin-bottom:14px;font-family:'JetBrains Mono',monospace}
+.statue b{color:var(--ink)}
+
+/* botón principal */
+.cta{
+  display:inline-flex;align-items:center;justify-content:center;gap:10px;
+  width:100%; padding:16px 20px;
+  background:var(--acid); color:#101010; border:none; border-radius:14px;
+  font:900 15px 'Inter',sans-serif; letter-spacing:.3px; cursor:pointer;
+  transition:transform .18s, box-shadow .18s, filter .18s;
+  box-shadow:0 12px 30px rgba(216,255,62,.28);
+}
+.cta:hover:not(:disabled){transform:translateY(-2px) scale(1.01);filter:brightness(1.05)}
+.cta:disabled{background:#232342;color:var(--dim);cursor:not-allowed;box-shadow:none;transform:none}
+.cta .arrow{font-size:18px}
+
+/* nota de seguridad — jamás muestra la URL */
+.sec{
+  margin-top:14px;font-size:10.5px;color:var(--dim);
+  display:flex;align-items:center;justify-content:center;gap:6px;
+}
+.sec svg{flex:none}
+
+/* ══ ADS (3 unidades únicas de Adsterra) ══ */
+.adzone{margin-top:22px;padding-top:22px;border-top:1px solid var(--line)}
+.ad-line{font:700 9px 'JetBrains Mono',monospace;color:var(--dim);letter-spacing:2px;text-transform:uppercase;margin-bottom:10px}
+.ads{display:flex;flex-direction:column;align-items:center;gap:16px}
+.adslot{
+  background:#111119;border:1px solid #1b1b2e;border-radius:14px;
+  overflow:hidden;position:relative;width:300px;height:250px;flex:none;
+}
+.adslot .tag{position:absolute;top:6px;right:8px;font:700 9px 'JetBrains Mono',monospace;color:var(--dim);z-index:2;background:#0008;padding:2px 8px;border-radius:20px}
+
+/* footer mínimo */
+.foot{margin-top:22px;color:#55556e;font:600 10px 'JetBrains Mono',monospace;letter-spacing:1.6px;text-transform:uppercase}
 </style>
 </head>
 <body>
-<div class="money m1">💵</div>
-<div class="money m2">💰</div>
-<div class="money m3">💵</div>
-<div class="money m4">💸</div>
 
 <div class="wrap">
-  <div class="logo"><div class="logo-x">X</div><div class="logo-name">STREAM <em>· enlace seguro</em></div></div>
-  <div class="box">
-    <div class="head" id="hd">Preparando tu enlace…</div>
-    <div class="sub" id="sub">Un momento — *no cierres esta pestaña*</div>
+  <!-- marca mínima -->
+  <div class="brandbar">
+    <div class="brand-x">X</div>
+    <div class="brand-txt">LINK <em>acortador</em></div>
+  </div>
 
-    <!-- 🔝 UN solo banner 300×250 (la unidad `825b6c26…` — NO duplicarla en la página) -->
-    <div class="adfield">
-      <div class="ad"><span class="ad-label">ADS</span>
-        <script type="text/javascript">atOptions = { 'key' : '825b6c261bcb7f937eaa5a427f5536d5', 'format' : 'iframe', 'height' : 250, 'width' : 300, 'params' : {} };</script>
-        <script type="text/javascript" src="https://www.highrevenueformat.com/825b6c261bcb7f937eaa5a427f5536d5/invoke.js"></script>
+  <div class="card">
+    <div class="eyebrow">Tu enlace seguro está casi listo</div>
+    <div class="h-title" id="mainTitle">Preparando descarga…</div>
+    <div class="h-sub" id="mainSub">Espera un momento mientras generamos tu enlace.</div>
+
+    <!-- banner 300×250 de Adsterra (la unidad del código 1) -->
+    <div class="adzone">
+      <div class="ad-line">Publicidad</div>
+      <div class="ads">
+        <div class="adslot">
+          <span class="tag">ADS</span>
+          <!-- banner iframe nativo de Adsterra -->
+          <script type="text/javascript">
+            atOptions = { 'key' : '825b6c261bcb7f937eaa5a427f5536d5', 'format' : 'iframe', 'height' : 250, 'width' : 300, 'params' : {} };
+          </script>
+          <script type="text/javascript" src="https://www.highrevenueformat.com/825b6c261bcb7f937eaa5a427f5536d5/invoke.js"></script>
+        </div>
       </div>
     </div>
 
-    <!-- ⏱ la cuenta atrás -->
-    <div class="status">
-      <div class="dot"></div><div class="dot"></div><div class="dot"></div>
-      <span id="ct">5</span>
+    <!-- contador anillo -->
+    <div class="ring" style="margin-top:22px">
+      <svg viewBox="0 0 118 118">
+        <circle class="base" cx="59" cy="59" r="50"/>
+        <circle class="fill" id="ringFill" cx="59" cy="59" r="50"/>
+      </svg>
+      <div class="num" id="countNum">3</div>
     </div>
 
-    <button id="ctaBtn" disabled>⏳ Por favor espera…</button>
-    <div class="link-note" id="lnk" style="display:none"></div>
+    <div class="statue" id="statue">Esperando <b>3</b> segundos…</div>
 
-    <!-- 🔻 UN banner 300×250 distinto abajo (Direct link de Adsterra, no repetir) -->
-    <div class="adfield">
-      <div class="ad"><span class="ad-label">ADS</span>
-        <iframe src="https://www.profitableratecpmnetwork.com/ur6i54e1s9?key=2d22ac685695ac659c2f75c51c04b51f" style="border:0;display:block;width:300px;height:250px" scrolling="no" frameborder="0"></iframe>
+    <button class="cta" id="goBtn" disabled>
+      <span>⏳ Espera por favor</span>
+    </button>
+
+    <div class="sec">
+      <svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4"><rect x="4" y="11" width="16" height="10" rx="2"/><path d="M8 11V7a4 4 0 0 1 8 0v4"/></svg>
+      Destino cifrado y oculto hasta que actives el botón.
+    </div>
+
+    <!-- segundo hueco de anuncio — DIRECT LINK iframe (unidad única) -->
+    <div class="adzone">
+      <div class="ad-line">Más ofertas</div>
+      <div class="ads">
+        <div class="adslot">
+          <span class="tag">ADS</span>
+          <iframe src="https://www.profitableratecpmnetwork.com/ur6i54e1s9?key=2d22ac685695ac659c2f75c51c04b51f" style="border:0;display:block;width:300px;height:250px" scrolling="no" frameborder="0"></iframe>
+        </div>
       </div>
     </div>
   </div>
+
+  <div class="foot">XLINK · tu acortador con anuncios</div>
 </div>
 
 <script>
 (function(){
   'use strict';
-  /* ── decodifica el destino ── */
+  /* ─── destino: decodificamos base64url de ?u=… sin mostrarlo nunca ─── */
   function decodeU(s){
     try{
       s = s.replace(/-/g,'+').replace(/_/g,'/');
@@ -122,41 +172,50 @@ body{background:radial-gradient(900px 400px at 80% -10%,rgba(124,58,237,.12),tra
   }
   const q = new URLSearchParams(location.search);
   const target = decodeU(q.get('u') || '');
-  const ref = document.getElementById('lnk');
-  /* el enlace real NUNCA se pinta en pantalla — solo se activa al final */
+
+  const titleEl = document.getElementById('mainTitle');
+  const subEl   = document.getElementById('mainSub');
+  const statue  = document.getElementById('statue');
+  const numEl   = document.getElementById('countNum');
+  const ring    = document.getElementById('ringFill');
+  const goBtn   = document.getElementById('goBtn');
+
   if (!target) {
-    document.getElementById('hd').textContent = 'Enlace no válido';
-    document.getElementById('sub').textContent = 'Este enlace está dañado o incompleto.';
+    titleEl.textContent = 'Enlace inválido';
+    subEl.textContent   = 'Este enlace está dañado o incompleto.';
+    statue.innerHTML    = '⚠ <b>sin destino</b>';
+    goBtn.disabled = true;
+    return;
   }
 
-  /* ── cuenta atrás de 3s + activación del botón ── */
-  const cta = document.getElementById('ctaBtn');
-  const ctEl = document.getElementById('ct');
-  let n = 3;
-  ctEl.textContent = n;
+  /* cuenta atrás de 3s + anillo llenándose */
+  const total = 3;
+  let n = total;
+  const dash = 314;
   const tick = setInterval(() => {
     n--;
-    ctEl.textContent = Math.max(0, n);
+    numEl.textContent = Math.max(0, n);
+    ring.style.strokeDashoffset = String(dash - (dash * (total - Math.max(0,n)) / total));
     if (n === 1) {
-      document.getElementById('hd').textContent = '¡Casi listo!';
-      document.getElementById('sub').textContent = 'En un momento podrás continuar.';
+      titleEl.textContent = '¡Ya casi!';
+      subEl.textContent = 'Un segundo más y continúas a tu enlace.';
     }
     if (n <= 0) {
       clearInterval(tick);
-      ctEl.textContent = '✔';
-      cta.disabled = false;
-      cta.textContent = '▶ CONTINUAR';
-      document.getElementById('sub').textContent = 'Toca el botón para abrir tu enlace.';
-      /* el contador desaparece y deja el botón limpio */
-      ctEl.parentElement.style.display = 'none';
-      if (target) cta.onclick = () => { window.location.replace(target); };
+      numEl.textContent = '✓';
+      statue.innerHTML = '✔ <b>Enlace listo</b>';
+      statue.style.color = 'var(--acid)';
+      goBtn.disabled = false;
+      goBtn.innerHTML = '<span class="arrow">▶</span> CONTINUAR';
+      goBtn.onclick = () => { window.location.replace(target); };
     }
   }, 1000);
 })();
 </script>
 
-<!-- 💬 Social bar de Adsterra (se despliega sola; el container lo exige el script) -->
+<!-- social bar / popunder de Adsterra: se rastrea en segundo plano -->
 <div id="container-160fa130587ee2c54605a09d7f6d332d"></div>
 <script async="async" data-cfasync="false" src="https://pl31187643.profitableratecpmnetwork.com/160fa130587ee2c54605a09d7f6d332d/invoke.js"></script>
+
 </body>
 </html>
