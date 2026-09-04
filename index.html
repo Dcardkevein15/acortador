@@ -1,0 +1,198 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<meta name="robots" content="noindex,nofollow">
+<title>X·STREAM · Preparando enlace…</title>
+<link rel="icon" type="image/svg+xml" href="../icon.svg">
+<!--
+  ═══════════════════════════════════════════════════════════
+  X·STREAM /z — ACORTADOR PROPIO CON TUS ANUNCIOS ADSTERRA
+  ──────────────────────────────────────────────────────────
+  1) Recibe la URL del video codificada en ?u=<base64url>
+  2) Muestra 4 banners 300×250 (dos arriba, dos abajo) con tu
+     código de Adsterra embebido.
+  3) Tras ~5 s activa el botón «CONTINUAR» que lleva al enlace.
+  4) Control total: sin ShrtFly ni intermediarios.
+  ═══════════════════════════════════════════════════════════
+-->
+<script>
+/* Códigos Adsterra para el DOMINIO DEL ACORTADOR */
+window.ADS = {
+  /* banner iframe 300×250 */
+  bannerKey: '825b6c261bcb7f937eaa5a427f5536d5',
+  bannerSrc: 'https://www.highrevenueformat.com/825b6c261bcb7f937eaa5a427f5536d5/invoke.js',
+  /* social bar */
+  socialSrc: 'https://pl31187643.profitableratecpmnetwork.com/160fa130587ee2c54605a09d7f6d332d/invoke.js',
+  socialContainer: '160fa130587ee2c54605a09d7f6d332d',
+  /* direct link de Adsterra */
+  directlink: 'https://www.profitableratecpmnetwork.com/ur6i54e1s9?key=2d22ac685695ac659c2f75c51c04b51f',
+};
+</script>
+<style>
+:root{--bg:#0a0a0f;--bg2:#101018;--panel:#14141d;--line:#23233a;--ink:#f2f2f7;--dim:#8a8aa3;--acid:#d8ff3e}
+*{margin:0;padding:0;box-sizing:border-box}
+html,body{height:100%}
+body{background:radial-gradient(900px 400px at 80% -10%,rgba(124,58,237,.12),transparent 60%),var(--bg);color:var(--ink);font-family:'Inter',Arial,sans-serif;min-height:100vh;display:flex;align-items:center;justify-content:center;padding:22px}
+.wrap{width:min(720px,96vw);text-align:center}
+.logo{display:flex;align-items:center;justify-content:center;gap:10px;margin-bottom:6px}
+.logo-x{width:40px;height:40px;border-radius:12px;background:var(--acid);color:#111;font-weight:900;font-size:24px;display:grid;place-items:center}
+.logo-name{font-weight:900;font-size:15px;letter-spacing:3px;font-family:monospace}
+.logo-name em{font-style:normal;color:var(--dim);font-size:11px}
+
+.box{background:var(--panel);border:1px solid var(--line);border-radius:22px;padding:26px 24px 24px;box-shadow:0 26px 70px rgba(0,0,0,.5)}
+.head{font-size:21px;font-weight:900;margin-bottom:4px}
+.sub{color:var(--dim);font-size:13px;margin-bottom:16px}
+
+/* ══ la lluvia de dólares animada ══ */
+@keyframes fall{
+  0%{transform:translateY(-30px) rotate(0deg);opacity:0}
+  20%{opacity:1}
+  100%{transform:translateY(40px) rotate(18deg);opacity:0}
+}
+.money{position:absolute;top:0;font-size:26px;animation:fall 1.8s ease-in infinite;pointer-events:none}
+.money.m1{left:8%;animation-delay:0s}
+.money.m2{left:30%;animation-delay:.55s}
+.money.m3{left:70%;animation-delay:.2s}
+.money.m4{left:88%;animation-delay:.9s}
+
+/* ══ los cuatro banners 300×250 ══ */
+.adfield{position:relative;display:flex;gap:14px;flex-wrap:wrap;justify-content:center;margin:14px 0}
+.ad{width:300px;height:250px;background:var(--bg2);border:1px solid var(--line);border-radius:10px;overflow:hidden;position:relative;flex:none}
+.ad-label{position:absolute;top:6px;right:8px;font:700 8px monospace;letter-spacing:1.4px;color:var(--dim);background:#0007;padding:2px 7px;border-radius:99px;z-index:3}
+.ad script,.ad iframe{display:block;border:0}
+
+/* ══ la cuenta atrás y el botón ══ */
+.status{display:flex;align-items:center;justify-content:center;gap:12px;margin:16px 0 8px}
+.dot{width:12px;height:12px;border-radius:50%;background:var(--acid);animation:pb 1s infinite}
+.dot:nth-child(2){animation-delay:.18s}
+.dot:nth-child(3){animation-delay:.36s}
+@keyframes pb{50%{transform:scale(.4);opacity:.4}}
+#ct{font:900 34px monospace;color:var(--acid);letter-spacing:2px}
+#ctaBtn{
+  display:inline-flex;align-items:center;gap:10px;justify-content:center;
+  padding:16px 32px;border-radius:16px;border:none;cursor:pointer;
+  background:var(--acid);color:#111;font-weight:900;font-size:15px;
+  box-shadow:0 14px 34px rgba(216,255,62,.3);transition:transform .18s,opacity .3s;
+  animation:pulse 1.8s ease-in-out infinite;
+}
+#ctaBtn:disabled{background:#2a2a3a;color:var(--dim);cursor:not-allowed;animation:none;box-shadow:none}
+#ctaBtn:hover:not(:disabled){transform:translateY(-2px) scale(1.02)}
+@keyframes pulse{50%{transform:scale(1.03)}}
+.link-note{color:var(--dim);font-size:11px;font-family:monospace;margin-top:10px}
+</style>
+</head>
+<body>
+<div class="money m1">💵</div>
+<div class="money m2">💰</div>
+<div class="money m3">💵</div>
+<div class="money m4">💸</div>
+
+<div class="wrap">
+  <div class="logo"><div class="logo-x">X</div><div class="logo-name">STREAM <em>· enlace seguro</em></div></div>
+  <div class="box">
+    <div class="head" id="hd">Preparando tu enlace…</div>
+    <div class="sub" id="sub">Un momento — *no cierres esta pestaña*</div>
+
+    <!-- 🔝 los dos banners 300×250 de ARIBA -->
+    <div class="adfield" id="adTop"></div>
+
+    <!-- ⏱ la cuenta atrás -->
+    <div class="status">
+      <div class="dot"></div><div class="dot"></div><div class="dot"></div>
+      <span id="ct">5</span>
+    </div>
+
+    <button id="ctaBtn" disabled>⏳ Por favor espera…</button>
+    <div class="link-note" id="lnk"></div>
+
+    <!-- 🔻 los dos banners 300×250 de ABAJO -->
+    <div class="adfield" id="adBot"></div>
+  </div>
+</div>
+
+<script>
+(function(){
+  'use strict';
+  /* ── decodifica el destino ── */
+  function decodeU(s){
+    try{
+      s = s.replace(/-/g,'+').replace(/_/g,'/');
+      while(s.length%4) s += '=';
+      return decodeURIComponent(escape(atob(s)));
+    }catch(e){ return null; }
+  }
+  const q = new URLSearchParams(location.search);
+  const target = decodeU(q.get('u') || '');
+  const ref = document.getElementById('lnk');
+  if (!target) {
+    document.getElementById('hd').textContent = 'Enlace no válido';
+    document.getElementById('sub').textContent = 'Este enlace está dañado o incompleto.';
+    ref.textContent = '';
+  } else {
+    ref.textContent = '→ ' + target;
+  }
+
+  /* ── inyecta los 4 banners 300×250 de Adsterra ──
+     OJO: los scripts NO se ejecutan si los insertamos con innerHTML.
+     Hay que crearlos con document.createElement('script') para que carguen. */
+  function adSlot300(){
+    const d = document.createElement('div');
+    d.className = 'ad';
+    d.innerHTML = '<span class="ad-label">ADS</span>';
+    return d;
+  }
+  /* coloca el banner de Adsterra dentro del hueco */
+  function mountBanner(slot){
+    /* el script atOptions debe definirse ANTES que el invoke.js */
+    const conf = document.createElement('script');
+    conf.type = 'text/javascript';
+    conf.text = "atOptions = { 'key' : '" + ADS.bannerKey + "', 'format' : 'iframe', 'height' : 250, 'width' : 300, 'params' : {} };";
+    slot.appendChild(conf);
+    const lib = document.createElement('script');
+    lib.type = 'text/javascript';
+    lib.src = ADS.bannerSrc;
+    slot.appendChild(lib);
+  }
+  const top = document.getElementById('adTop');
+  const bot = document.getElementById('adBot');
+  /* 2 banners Adsterra arriba */
+  mountBanner(top.appendChild(adSlot300()));
+  mountBanner(top.appendChild(adSlot300()));
+  /* 1 banner + 1 direct-link iframe abajo */
+  mountBanner(bot.appendChild(adSlot300()));
+  const dl = adSlot300();
+  dl.innerHTML = '<span class="ad-label">ADS</span><iframe src="' + ADS.directlink + '" width="300" height="250" scrolling="no" frameborder="0" style="border:0;display:block;width:300px;height:250px"></iframe>';
+  bot.appendChild(dl);
+  /* la social bar de Adsterra (carga en segundo plano) */
+  const sbDiv = document.createElement('div');
+  sbDiv.id = 'container-' + ADS.socialContainer;
+  const sbScript = document.createElement('script');
+  sbScript.async = true;
+  sbScript.setAttribute('data-cfasync', 'false');
+  sbScript.src = ADS.socialSrc;
+  document.body.appendChild(sbDiv);
+  document.body.appendChild(sbScript);
+
+  /* ── cuenta atrás + activación del botón ── */
+  const cta = document.getElementById('ctaBtn');
+  const ctEl = document.getElementById('ct');
+  let n = 5;
+  ctEl.textContent = n;
+  const tick = setInterval(() => {
+    n--;
+    ctEl.textContent = Math.max(0, n);
+    if (n === 2) { document.getElementById('hd').textContent = '¡Casi listo!'; document.getElementById('sub').textContent = 'El enlace se abre en un clic.'; }
+    if (n <= 0) {
+      clearInterval(tick);
+      ctEl.textContent = '✔';
+      cta.disabled = false;
+      cta.textContent = '▶ CONTINUAR A TU DESCARGA';
+      if (target) cta.onclick = () => { window.location.replace(target); };
+    }
+  }, 1000);
+})();
+</script>
+</body>
+</html>
