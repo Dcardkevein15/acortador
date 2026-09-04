@@ -47,27 +47,6 @@ body{
 .h-title{font:900 26px/1.15 'Archivo Black',Arial;letter-spacing:-.4px;margin-bottom:6px}
 .h-sub{color:var(--dim);font-size:13.5px;margin-bottom:20px}
 
-/* ══ overlay anti-adblock bloqueante ══ */
-#abgate{
-  position:fixed;inset:0;z-index:999;background:rgba(4,4,10,.97);
-  display:flex;align-items:center;justify-content:center;padding:20px;
-}
-#abgate .inner{
-  max-width:420px;text-align:center;background:var(--card);
-  border:1px solid var(--hot);border-radius:20px;padding:30px 24px;
-  box-shadow:0 0 0 6px rgba(255,46,99,.15), 0 30px 60px rgba(0,0,0,.6);
-}
-#abgate .ico{font-size:46px;margin-bottom:12px}
-#abgate h2{font:900 19px 'Archivo Black',Arial;margin-bottom:10px;color:var(--hot);letter-spacing:-.3px}
-#abgate p{color:var(--dim);font-size:13.5px;line-height:1.6;margin-bottom:16px}
-#abgate .steps{text-align:left;font-size:12.5px;color:var(--dim);margin:14px 0;line-height:2}
-#abgate .steps b{color:var(--acid)}
-#abgate .rel{
-  display:inline-block;padding:12px 22px;border-radius:12px;
-  background:var(--acid);color:#111;font-weight:800;font-size:13px;cursor:pointer;border:none;
-}
-#abgate .rel:hover{filter:brightness(1.07);transform:translateY(-1px)}
-
 /* ══ contador en anillo SVG ══ */
 .ring{width:118px;height:118px;position:relative;margin:0 auto 18px}
 .ring svg{width:118px;height:118px;transform:rotate(-90deg)}
@@ -117,21 +96,6 @@ body{
 </style>
 </head>
 <body>
-
-<!-- Anti-adblock: obliga a recargar con AdBlock desactivado para continuar -->
-<div id="abgate" hidden>
-  <div class="inner">
-    <div class="ico">🛡️</div>
-    <h2>Desbloquea los anuncios</h2>
-    <p>La descarga es gratuita porque la sufragan los anuncios. Sin ellos, no podemos continuar.</p>
-    <div class="steps">
-      1. Toca el <b>icono de tu bloqueador</b> (uBlock, AdBlock, Brave…)<br>
-      2. Elige <b>«Permitir en este sitio»</b><br>
-      3. Recarga y tu enlace aparecerá
-    </div>
-    <button class="rel" onclick="location.reload()">Ya lo desactivé — recargar</button>
-  </div>
-</div>
 
 <div class="wrap">
   <!-- marca mínima -->
@@ -231,63 +195,8 @@ body{
      (adsbox, adsbygoogle, etc.). Si desaparece/oculta → hay AdBlock.
      Solo así — nunca por "no cargó el banner" (eso sucede a veces
      sin AdBlock, por red lenta).                                      */
-  const abgate = document.getElementById('abgate');
-  let adsOk = true;
-
-  async function detectAdblock() {
-    /* la trampa: un div "fake de anuncio" invisible. uBlock/AdBlock lo esconden. */
-    const bait = document.createElement('div');
-    bait.className = 'adsbox adsbygoogle ads ad-banner ad-slot pub_300x250 pub_728x90 sponsor';
-    bait.style.cssText = 'position:absolute;left:-9999px;top:-9999px;width:1px;height:1px;overflow:hidden';
-    bait.innerHTML = '&nbsp;';
-    document.body.appendChild(bait);
-    /* damos ~450ms a que el bloqueador actúe sobre el bait */
-    await new Promise(r => setTimeout(r, 450));
-    const style = getComputedStyle(bait);
-    const blocked =
-      bait.offsetHeight === 0 ||
-      style.display === 'none' ||
-      style.visibility === 'hidden' ||
-      style.display === 'none' && bait.offsetWidth === 0;
-    bait.remove();
-    return blocked;
-  }
-
-  /* se lanza una vez al inicio; si detecta bloqueador → activa el gate */
-  (async () => {
-    adsOk = !(await detectAdblock());
-    if (!adsOk) {
-      abgate.hidden = false;
-      goBtn.disabled = true;
-      titleEl.textContent = '🛡 Bloqueador activado';
-      subEl.textContent = 'Para continuar, desactiva AdBlock y pulsa «Ya lo desactivé».';
-    }
-  })();
-
-  /* el botón «Ya lo desactivé» del overlay re-verifica de verdad antes de dejar pasar */
-  const abBtn = abgate && abgate.querySelector('.rel');
-  if (abBtn) {
-    abBtn.onclick = async ev => {
-      ev.preventDefault();
-      const still = await detectAdblock();
-      if (!still) {
-        abgate.hidden = true;
-        /* dejamos que la cuenta atrás y el botón sigan su curso si ya terminaron antes */
-        adsOk = true;
-        goBtn.disabled = false;
-        goBtn.style.pointerEvents = '';
-        titleEl.textContent = 'Preparando descarga…';
-        subEl.textContent = 'Listo. Pulsa «CONTINUAR».';
-        goBtn.innerHTML = '<span class="arrow">▶</span> CONTINUAR';
-      } else {
-        subEl.textContent = 'Aún detecto el bloqueador — comprueba que lo quitaste por completo.';
-      }
-    };
-  }
-
-  /* 👑 VIP (administrador de la app): sin anuncios ni espera */
+  /* 👑 VIP (administrador de la app): sin espera extra */
   if (isVip) {
-    document.getElementById('abgate').hidden = true;
     titleEl.textContent = 'Modo admin';
     subEl.textContent = 'Pulsa para continuar — los anuncios están desactivados solo para ti.';
     statue.innerHTML = '✔ <b>Enlace listo</b>';
@@ -314,15 +223,9 @@ body{
       numEl.textContent = '✓';
       statue.innerHTML = '✔ <b>Enlace listo</b>';
       statue.style.color = 'var(--acid)';
-      /* activamos el botón SOLO si los anuncios han cargado */
-      if (adsOk) {
-        goBtn.disabled = false;
-        goBtn.innerHTML = '<span class="arrow">▶</span> CONTINUAR';
-        goBtn.onclick = () => { window.location.replace(target); };
-      } else {
-        goBtn.disabled = true;
-        goBtn.innerHTML = '🔒 Desbloquea AdBlock para continuar';
-      }
+      goBtn.disabled = false;
+      goBtn.innerHTML = '<span class="arrow">▶</span> CONTINUAR';
+      goBtn.onclick = () => { window.location.replace(target); };
     }
   }, 1000);
 })();
