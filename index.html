@@ -202,7 +202,7 @@ body{
     if (abierto) return;
     abierto = true;
     /* «forma externa»: pestaña nueva al lado del acortador */
-    const w = window.open(target, '_blank', 'noopener');
+    const w = window.open(target, '_blank');
     if (!w) {
       /* bloqueada → navegamos esta misma como último recurso */
       window.location.replace(target);
