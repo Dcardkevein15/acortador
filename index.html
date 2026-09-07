@@ -74,7 +74,16 @@ body{
 .cta:disabled{background:#232342;color:var(--dim);cursor:not-allowed;box-shadow:none;transform:none}
 .cta .arrow{font-size:18px}
 
-/* nota de seguridad — jamás muestra la URL */
+/* destino visible — transparencia anti-phishing */
+.dest{
+  margin:-6px 0 14px;font:600 11px 'JetBrains Mono',monospace;color:var(--dim);
+  word-break:break-all;
+}
+.dest b{color:var(--acid)}
+.dest.warn b{color:#ffb020}
+.dest.warn span{color:#ffb020}
+
+/* nota de seguridad */
 .sec{
   margin-top:14px;font-size:10.5px;color:var(--dim);
   display:flex;align-items:center;justify-content:center;gap:6px;
@@ -108,6 +117,7 @@ body{
     <div class="eyebrow">Tu enlace seguro está casi listo</div>
     <div class="h-title" id="mainTitle">Preparando descarga…</div>
     <div class="h-sub" id="mainSub">Espera un momento mientras generamos tu enlace.</div>
+    <div class="dest" id="destHost"></div>
 
     <!-- banner 300×250 de Adsterra (la unidad del código 1) -->
     <div class="adzone">
@@ -141,7 +151,7 @@ body{
 
     <div class="sec">
       <svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4"><rect x="4" y="11" width="16" height="10" rx="2"/><path d="M8 11V7a4 4 0 0 1 8 0v4"/></svg>
-      Destino cifrado y oculto hasta que actives el botón.
+      Verificamos el destino antes de abrirlo — solo http/https permitidos.
     </div>
 
     <!-- segundo hueco de anuncio — DIRECT LINK iframe (unidad única) -->
@@ -162,7 +172,7 @@ body{
 <script>
 (function(){
   'use strict';
-  /* ─── destino: decodificamos base64url de ?u=… sin mostrarlo nunca ─── */
+  /* ─── destino: decodificamos base64url de ?u=… ─── */
   function decodeU(s){
     try{
       s = s.replace(/-/g,'+').replace(/_/g,'/');
@@ -177,6 +187,7 @@ body{
 
   const titleEl = document.getElementById('mainTitle');
   const subEl   = document.getElementById('mainSub');
+  const destEl  = document.getElementById('destHost');
   const statue  = document.getElementById('statue');
   const numEl   = document.getElementById('countNum');
   const ring    = document.getElementById('ringFill');
@@ -190,24 +201,52 @@ body{
     return;
   }
 
-  /* ═══ ANTI-ADBLOCK — detección real por trampa ═══
-     Inserta un div usando clases que los bloqueadores ocultan
-     (adsbox, adsbygoogle, etc.). Si desaparece/oculta → hay AdBlock.
-     Solo así — nunca por "no cargó el banner" (eso sucede a veces
-     sin AdBlock, por red lenta).                                      */
+  /* ─── 🔒 VALIDACIÓN ESTRICTA DEL DESTINO ───
+     Solo URLs absolutas http(s). javascript:, data:, file:, vbscript:,
+     esquemas raros y texto suelto = BLOQUEADO. Ni se muestra el botón. */
+  let dest = null;
+  try { dest = new URL(target); } catch (e) { dest = null; }
+  if (!dest || (dest.protocol !== 'https:' && dest.protocol !== 'http:')) {
+    titleEl.textContent = '⛔ Enlace bloqueado';
+    subEl.textContent   = 'Este enlace no apunta a una dirección web http/https. Detenido por seguridad.';
+    destEl.textContent  = '';
+    statue.innerHTML    = '🛡 <b>destino no permitido</b>';
+    goBtn.disabled = true;
+    return;
+  }
+
+  /* ─── transparencia: el destino REAL a la vista antes de saltar ─── */
+  const KNOWN = ['drive.google.com','drive.usercontent.google.com','docs.google.com',
+    'googleusercontent.com','archive.org','streamtape.com','mega.nz','mega.io','yapido.click'];
+  const known = KNOWN.some(h => dest.host === h || dest.host.endsWith('.' + h));
+  const httpPlain = dest.protocol === 'http:';
+  destEl.textContent = 'Destino: ';
+  var b = document.createElement('b'); b.textContent = dest.host; destEl.appendChild(b);
+  if (!known || httpPlain) {
+    destEl.classList.add('warn');
+    const w = document.createElement('span');
+    w.textContent = httpPlain
+      ? ' — ⚠ conexión no cifrada (http), revisa bien antes de continuar'
+      : ' — ⚠ sitio no reconocido: verifica que confías en él';
+    destEl.appendChild(w);
+  }
+
   /* 👑 VIP (administrador de la app): sin espera extra */
   /* ══ Función ÚNICA de apertura: externa (pestaña nueva), 1 sola vez ══ */
   let abierto = false;
   function openExt() {
     if (abierto) return;
     abierto = true;
-    /* «forma externa»: pestaña nueva al lado del acortador */
-    const w = window.open(target, '_blank');
+    /* «forma externa»: pestaña nueva al lado del acortador.
+       OJO: sin 'noopener' en features — con noopener window.open siempre
+       devuelve null y dispararía la doble apertura; anulamos opener a mano. */
+    const w = window.open(dest.href, '_blank');
     if (!w) {
-      /* bloqueada → navegamos esta misma como último recurso */
-      window.location.replace(target);
+      /* bloqueada → navegamos esta misma como último recurso (destino ya validado http/s) */
+      window.location.replace(dest.href);
       return;
     }
+    try { w.opener = null; } catch (e) { } /* anti reverse-tabnabbing */
     goBtn.disabled = true;
     goBtn.style.pointerEvents = 'none';
     numEl.textContent = '✓';
