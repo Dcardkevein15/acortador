@@ -102,6 +102,23 @@ body{
 
 /* footer mínimo */
 .foot{margin-top:22px;color:#55556e;font:600 10px 'JetBrains Mono',monospace;letter-spacing:1.6px;text-transform:uppercase}
+
+/* ══ fases del flujo ══ */
+.hidden{display:none !important}
+#phase2{animation:pep .5s cubic-bezier(.2,1.2,.3,1) both}
+
+/* botón listo: cambio de color + latido suave (sutil, nada estridente) */
+.cta.ready{
+  background:#eaff70;color:#0a0a0a;
+  animation:readyPulse 1.8s ease-in-out infinite;
+}
+@keyframes readyPulse{
+  0%,100%{box-shadow:0 12px 30px rgba(216,255,62,.28)}
+  50%{box-shadow:0 14px 44px rgba(216,255,62,.58)}
+}
+
+/* tercera unidad (social bar) apilada dentro de la tarjeta */
+.adslot-bar{min-height:0;height:auto;padding:2px}
 </style>
 </head>
 <body>
@@ -115,53 +132,55 @@ body{
 
   <div class="card">
     <div class="eyebrow">Tu enlace seguro está casi listo</div>
-    <div class="h-title" id="mainTitle">Preparando descarga…</div>
-    <div class="h-sub" id="mainSub">Espera un momento mientras generamos tu enlace.</div>
+    <div class="h-title" id="mainTitle">Preparando tu enlace…</div>
+    <div class="h-sub" id="mainSub">Verificando el destino y cargando el contenido…</div>
     <div class="dest" id="destHost"></div>
 
-    <!-- banner 300×250 de Adsterra (la unidad del código 1) -->
+    <!-- LAS TRES unidades de anuncio apiladas (fase 1): cargan desde el
+         segundo 0 — los 3 segundos iniciales existen para que se pinten -->
     <div class="adzone">
       <div class="ad-line">Publicidad</div>
       <div class="ads">
+        <!-- ① banner 300×250 nativo de Adsterra -->
         <div class="adslot">
           <span class="tag">ADS</span>
-          <!-- banner iframe nativo de Adsterra -->
           <script type="text/javascript">
             atOptions = { 'key' : '825b6c261bcb7f937eaa5a427f5536d5', 'format' : 'iframe', 'height' : 250, 'width' : 300, 'params' : {} };
           </script>
           <script type="text/javascript" src="https://www.highrevenueformat.com/825b6c261bcb7f937eaa5a427f5536d5/invoke.js"></script>
         </div>
-      </div>
-    </div>
-
-    <!-- contador anillo -->
-    <div class="ring" style="margin-top:22px">
-      <svg viewBox="0 0 118 118">
-        <circle class="base" cx="59" cy="59" r="50"/>
-        <circle class="fill" id="ringFill" cx="59" cy="59" r="50"/>
-      </svg>
-      <div class="num" id="countNum">3</div>
-    </div>
-
-    <div class="statue" id="statue">Esperando <b>3</b> segundos…</div>
-
-    <button class="cta" id="goBtn" disabled>
-      <span>⏳ Espera por favor</span>
-    </button>
-
-    <div class="sec">
-      <svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4"><rect x="4" y="11" width="16" height="10" rx="2"/><path d="M8 11V7a4 4 0 0 1 8 0v4"/></svg>
-      Verificamos el destino antes de abrirlo — solo http/https permitidos.
-    </div>
-
-    <!-- segundo hueco de anuncio — DIRECT LINK iframe (unidad única) -->
-    <div class="adzone">
-      <div class="ad-line">Más ofertas</div>
-      <div class="ads">
+        <!-- ② direct link iframe -->
         <div class="adslot">
           <span class="tag">ADS</span>
           <iframe src="https://www.profitableratecpmnetwork.com/ur6i54e1s9?key=2d22ac685695ac659c2f75c51c04b51f" style="border:0;display:block;width:300px;height:250px" scrolling="no" frameborder="0"></iframe>
         </div>
+        <!-- ③ social bar (su contenedor vive aquí; el script va al final) -->
+        <div class="adslot adslot-bar">
+          <span class="tag">ADS</span>
+          <div id="container-160fa130587ee2c54605a09d7f6d332d"></div>
+        </div>
+      </div>
+    </div>
+
+    <!-- FASE 2: aparece a los 3 segundos exactos — anillo + cuenta atrás + botón -->
+    <div id="phase2" class="hidden">
+      <div class="ring" style="margin-top:22px">
+        <svg viewBox="0 0 118 118">
+          <circle class="base" cx="59" cy="59" r="50"/>
+          <circle class="fill" id="ringFill" cx="59" cy="59" r="50"/>
+        </svg>
+        <div class="num" id="countNum">3</div>
+      </div>
+
+      <div class="statue" id="statue">Esperando <b>3</b> segundos…</div>
+
+      <button class="cta" id="goBtn" disabled>
+        <span>⏳ Espera por favor</span>
+      </button>
+
+      <div class="sec">
+        <svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4"><rect x="4" y="11" width="16" height="10" rx="2"/><path d="M8 11V7a4 4 0 0 1 8 0v4"/></svg>
+        Verificamos el destino antes de abrirlo — solo http/https permitidos.
       </div>
     </div>
   </div>
@@ -253,7 +272,11 @@ body{
     statue.innerHTML = '📤 <b>Abierto en otra pestaña</b>';
   }
 
+  const phase2 = document.getElementById('phase2');
+
   if (isVip) {
+    /* VIP: fase 2 directa y lista, sin espera */
+    phase2.classList.remove('hidden');
     titleEl.textContent = 'Modo admin';
     subEl.textContent = 'Pulsa para continuar — sin espera ni publicidad para ti.';
     statue.innerHTML = '✔ <b>Enlace listo</b>';
@@ -263,33 +286,43 @@ body{
     return;
   }
 
-  /* cuenta atrás de 3s + anillo llenándose */
-  const total = 3;
-  let n = total;
-  const dash = 314;
-  const tick = setInterval(() => {
-    n--;
-    numEl.textContent = Math.max(0, n);
-    ring.style.strokeDashoffset = String(dash - (dash * (total - Math.max(0,n)) / total));
-    if (n === 1) {
-      titleEl.textContent = '¡Ya casi!';
-      subEl.textContent = 'Un segundo más y continúas a tu enlace.';
-    }
-    if (n <= 0) {
-      clearInterval(tick);
-      numEl.textContent = '✓';
-      statue.innerHTML = '✔ <b>Enlace listo</b>';
-      statue.style.color = 'var(--acid)';
-      goBtn.disabled = false;
-      goBtn.innerHTML = '<span class="arrow">▶</span> CONTINUAR';
-      goBtn.onclick = openExt;
-    }
-  }, 1000);
+  /* ══ FASE 1: "Preparando tu enlace…" — EXACTAMENTE 3 segundos con
+     las tres unidades de anuncios apiladas cargando. Al terminar,
+     la fase 2 aparece al instante. ══ */
+  setTimeout(() => {
+    phase2.classList.remove('hidden');
+    titleEl.textContent = 'Tu enlace está casi listo';
+    subEl.textContent = 'Última comprobación — tres segundos.';
+
+    /* ══ FASE 2: cuenta atrás 3s + anillo; al acabar, el botón
+       se enciende con un pulso sutil (listo para pulsar) ══ */
+    const total = 3;
+    let n = total;
+    const dash = 314;
+    const tick = setInterval(() => {
+      n--;
+      numEl.textContent = Math.max(0, n);
+      ring.style.strokeDashoffset = String(dash - (dash * (total - Math.max(0,n)) / total));
+      if (n === 1) {
+        titleEl.textContent = '¡Ya casi!';
+        subEl.textContent = 'Un segundo más y continúas a tu enlace.';
+      }
+      if (n <= 0) {
+        clearInterval(tick);
+        numEl.textContent = '✓';
+        statue.innerHTML = '✔ <b>Enlace listo</b>';
+        statue.style.color = 'var(--acid)';
+        goBtn.disabled = false;
+        goBtn.classList.add('ready');           /* ← la señal sutil */
+        goBtn.innerHTML = '<span class="arrow">▶</span> CONTINUAR';
+        goBtn.onclick = openExt;
+      }
+    }, 1000);
+  }, 3000);
 })();
 </script>
 
-<!-- social bar / popunder de Adsterra: se rastrea en segundo plano -->
-<div id="container-160fa130587ee2c54605a09d7f6d332d"></div>
+<!-- social bar / popunder de Adsterra (3ª unidad — su contenedor vive apilado arriba) -->
 <script async="async" data-cfasync="false" src="https://pl31187643.profitableratecpmnetwork.com/160fa130587ee2c54605a09d7f6d332d/invoke.js"></script>
 
 </body>
