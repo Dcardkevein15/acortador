@@ -103,9 +103,20 @@ body{
 /* footer mínimo */
 .foot{margin-top:22px;color:#55556e;font:600 10px 'JetBrains Mono',monospace;letter-spacing:1.6px;text-transform:uppercase}
 
-/* ══ fases del flujo ══ */
-.hidden{display:none !important}
-#phase2{animation:pep .5s cubic-bezier(.2,1.2,.3,1) both}
+/* ══ FASES: la página 1 ("Preparando tu enlace…") dura 3s exactos con los
+   tres anuncios apilados; luego entra al instante la fase 2 (el acortador
+   con su orden de anuncios original). Los anuncios NO se mueven del DOM:
+   solo se reordenan visualmente por fases (flex order) → cero recargas. ══ */
+.card{display:flex;flex-direction:column}
+.hd{order:10}
+#az1{order:20}
+#az2{order:30}
+#azSocial{order:35}
+#phase2{display:none;order:25}
+body.f2 #phase2{display:block;animation:pep .5s cubic-bezier(.2,1.2,.3,1) both}
+/* fase 1 respira: la cabecera se siente de página propia */
+body:not(.f2) .card{padding-top:44px}
+body:not(.f2) .hd{margin-bottom:6px}
 
 /* botón listo: cambio de color + latido suave (sutil, nada estridente) */
 .cta.ready{
@@ -131,17 +142,17 @@ body{
   </div>
 
   <div class="card">
-    <div class="eyebrow">Tu enlace seguro está casi listo</div>
-    <div class="h-title" id="mainTitle">Preparando tu enlace…</div>
-    <div class="h-sub" id="mainSub">Verificando el destino y cargando el contenido…</div>
-    <div class="dest" id="destHost"></div>
+    <div class="hd">
+      <div class="eyebrow">Tu enlace seguro está casi listo</div>
+      <div class="h-title" id="mainTitle">Preparando tu enlace…</div>
+      <div class="h-sub" id="mainSub">Cargando el contenido y verificando el destino…</div>
+      <div class="dest" id="destHost"></div>
+    </div>
 
-    <!-- LAS TRES unidades de anuncio apiladas (fase 1): cargan desde el
-         segundo 0 — los 3 segundos iniciales existen para que se pinten -->
-    <div class="adzone">
+    <!-- ① banner 300×250 Adsterra — fase 1: apilado · fase 2: arriba (como antes) -->
+    <div class="adzone" id="az1">
       <div class="ad-line">Publicidad</div>
       <div class="ads">
-        <!-- ① banner 300×250 nativo de Adsterra -->
         <div class="adslot">
           <span class="tag">ADS</span>
           <script type="text/javascript">
@@ -149,12 +160,23 @@ body{
           </script>
           <script type="text/javascript" src="https://www.highrevenueformat.com/825b6c261bcb7f937eaa5a427f5536d5/invoke.js"></script>
         </div>
-        <!-- ② direct link iframe -->
+      </div>
+    </div>
+
+    <!-- ② direct link iframe — fase 1: apilado · fase 2: abajo del botón (como antes) -->
+    <div class="adzone" id="az2">
+      <div class="ad-line">Más ofertas</div>
+      <div class="ads">
         <div class="adslot">
           <span class="tag">ADS</span>
           <iframe src="https://www.profitableratecpmnetwork.com/ur6i54e1s9?key=2d22ac685695ac659c2f75c51c04b51f" style="border:0;display:block;width:300px;height:250px" scrolling="no" frameborder="0"></iframe>
         </div>
-        <!-- ③ social bar (su contenedor vive aquí; el script va al final) -->
+      </div>
+    </div>
+
+    <!-- ③ social bar (tercera unidad) — contenedor incluido en la pila de la fase 1 -->
+    <div class="adzone" id="azSocial">
+      <div class="ads">
         <div class="adslot adslot-bar">
           <span class="tag">ADS</span>
           <div id="container-160fa130587ee2c54605a09d7f6d332d"></div>
@@ -162,8 +184,8 @@ body{
       </div>
     </div>
 
-    <!-- FASE 2: aparece a los 3 segundos exactos — anillo + cuenta atrás + botón -->
-    <div id="phase2" class="hidden">
+    <!-- FASE 2: el acortador de siempre (orden original) — anillo + botón -->
+    <div id="phase2">
       <div class="ring" style="margin-top:22px">
         <svg viewBox="0 0 118 118">
           <circle class="base" cx="59" cy="59" r="50"/>
@@ -272,11 +294,17 @@ body{
     statue.innerHTML = '📤 <b>Abierto en otra pestaña</b>';
   }
 
-  const phase2 = document.getElementById('phase2');
+  /* ══ salto a la FASE 2: el acortador con su orden original. Se usa
+     la clase body.f2 (los anuncios no se reinsertan: cero recargas) ══ */
+  function toPhase2() {
+    document.body.classList.add('f2');
+    titleEl.textContent = 'Tu enlace está casi listo';
+    subEl.textContent = 'Última comprobación — tres segundos.';
+  }
 
   if (isVip) {
-    /* VIP: fase 2 directa y lista, sin espera */
-    phase2.classList.remove('hidden');
+    /* VIP: fase 2 directa y lista, sin espera ni publicidad */
+    toPhase2();
     titleEl.textContent = 'Modo admin';
     subEl.textContent = 'Pulsa para continuar — sin espera ni publicidad para ti.';
     statue.innerHTML = '✔ <b>Enlace listo</b>';
@@ -287,15 +315,12 @@ body{
   }
 
   /* ══ FASE 1: "Preparando tu enlace…" — EXACTAMENTE 3 segundos con
-     las tres unidades de anuncios apiladas cargando. Al terminar,
-     la fase 2 aparece al instante. ══ */
+     las tres unidades apiladas cargando. Al término: salto automático
+     instantáneo al acortador (fase 2). ══ */
   setTimeout(() => {
-    phase2.classList.remove('hidden');
-    titleEl.textContent = 'Tu enlace está casi listo';
-    subEl.textContent = 'Última comprobación — tres segundos.';
-
-    /* ══ FASE 2: cuenta atrás 3s + anillo; al acabar, el botón
-       se enciende con un pulso sutil (listo para pulsar) ══ */
+    toPhase2();
+    /* ══ FASE 2: cuenta atrás 3s + anillo; al acabar, el botón se
+       enciende con un pulso sutil (ya se puede pulsar) ══ */
     const total = 3;
     let n = total;
     const dash = 314;
