@@ -16,6 +16,7 @@
 'use strict';
 
 const GH_API = 'https://api.github.com';
+const TG_API = 'https://api.telegram.org';
 const REPO = process.env.GH_REPO || 'Dcardkevein15/pelisfull';
 const DIR = 'propuestas';
 const BRANCH = 'main';
@@ -124,6 +125,21 @@ module.exports = async function handler(req, res) {
         content: toB64(raw), branch: BRANCH,
       });
       await ghTrim(tk);
+
+      /* 📬 aviso directo al admin por Telegram (nunca rompe el POST) */
+      const tgTk = process.env.TG_BOT_TOKEN;
+      const adminChat = process.env.TG_ADMIN_CHAT;
+      if (tgTk && adminChat) {
+        try {
+          await fetch(`${TG_API}/bot${tgTk}/sendMessage`, {
+            method: 'POST', headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({
+              chat_id: adminChat, parse_mode: 'HTML',
+              text: `📩 <b>Nueva propuesta</b> de <b>${String(by || 'moderador').slice(0, 50).replace(/</g, '&lt;')}</b>\n· ${n || (payload.series || []).length} entradas\n\nRevísala en tu app → Perfil → 📩 Propuestas.`,
+            }),
+          });
+        } catch (e) { /* silencio: la propuesta ya está en el buzón de todas formas */ }
+      }
       return res.status(200).json({ ok: true, id });
     }
 
