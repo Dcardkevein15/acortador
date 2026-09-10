@@ -70,7 +70,11 @@ module.exports = async function handler(req, res) {
   if (req.method === 'OPTIONS') return res.status(204).end();
 
   try {
-    if (!process.env.PROP_KEY || (req.headers['x-prop-key'] || '') !== process.env.PROP_KEY) {
+    /* diagnóstico claro: no es lo mismo "falta configurarla" que "no coincide" */
+    if (!process.env.PROP_KEY) {
+      return res.status(500).json({ ok: false, error: 'PROP_KEY no está creada en Vercel — Settings → Environment Variables → Redeploy' });
+    }
+    if ((req.headers['x-prop-key'] || '') !== process.env.PROP_KEY) {
       return res.status(403).json({ ok: false, error: 'clave de propuestas incorrecta' });
     }
     const tk = process.env.GH_TOKEN;
