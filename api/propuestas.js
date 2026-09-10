@@ -93,7 +93,22 @@ module.exports = async function handler(req, res) {
       }
       const f = await gh(tk, 'GET', `/repos/${REPO}/contents/${DIR}/${encodeURIComponent(id)}.json?ref=${BRANCH}`);
       if (!f) return res.status(404).json({ ok: false, error: 'no existe' });
-      const item = JSON.parse(fromB64(f.content));
+      /* ⚠ GitHub Contents API devuelve `content` VACÍO para archivos >1 MB.
+         En ese caso bajamos el archivo por su download_url (o por blob). */
+      let text = '';
+      if (f.content && String(f.content).trim()) {
+        text = fromB64(String(f.content).replace(/\s+/g, ''));
+      } else if (f.download_url) {
+        const rr = await fetch(f.download_url, { headers: { Authorization: 'token ' + tk } });
+        if (!rr.ok) throw new Error('descarga del archivo: HTTP ' + rr.status);
+        text = await rr.text();
+      } else if (f.sha) {
+        const blob = await gh(tk, 'GET', `/repos/${REPO}/git/blobs/${f.sha}`);
+        text = blob && blob.content ? fromB64(String(blob.content).replace(/\s+/g, '')) : '';
+      }
+      let item;
+      try { item = JSON.parse(text); }
+      catch (e) { return res.status(500).json({ ok: false, error: 'propuesta ilegible (contenido roto al leer)' }); }
       return res.status(200).json({ ok: true, item });
     }
 
