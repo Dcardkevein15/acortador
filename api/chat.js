@@ -307,19 +307,24 @@ module.exports = async function handler(req, res) {
             tengan override LOCAL vean que cambiaste la imagen oficial      ═══ */
       if (op === 'bgUpload') {
         if (!keyOk) return res.status(403).json({ ok: false, error: 'solo el administrador' });
+        const dev = ['movil', 'tablet', 'pc'].includes(b.dev) ? b.dev : null;
+        if (!dev) return res.status(400).json({ ok: false, error: 'dev: movil | tablet | pc' });
         const dataUrl = String(b.dataUrl || '');
         const m2 = dataUrl.match(/^data:image\/(jpeg|jpg|png|webp);base64,([A-Za-z0-9+/=]+)$/i);
         if (!m2) return res.status(400).json({ ok: false, error: 'imagen no válida (usa jpg/png/webp)' });
         const bytes = Buffer.from(m2[2], 'base64');
         if (bytes.length > 2_500_000) return res.status(413).json({ ok: false, error: 'la imagen pasa de 2,5 MB — recórtala un poco' });
-        const ext = m2[1] === 'png' ? 'png' : (m2[1] === 'webp' ? 'webp' : 'jpg');
-        const filePath = `assets/chat-bg.${ext}`;
+        const filePath = `assets/chat-bg-${dev}.jpg`;
         const old = await gh(tk, 'GET', `/repos/${REPO}/contents/${filePath}?ref=${BRANCH}`);
         await gh(tk, 'PUT', `/repos/${REPO}/contents/${filePath}`, {
-          message: '🖼 fondo del chat', branch: BRANCH, content: toB64(m2[2]), ...(old ? { sha: old.sha } : {}),
+          message: `🖼 fondo chat ${dev}`, branch: BRANCH, content: m2[2], ...(old ? { sha: old.sha } : {}),
         });
         const url = `https://x.yapido.click/${filePath}?v=${Date.now()}`;
-        await dbWrite(tk, d => { d.meta.bg = url; d.meta.bgTs = Date.now(); d.meta.updatedAt = Date.now(); });
+        await dbWrite(tk, d => {
+          d.meta.bg = d.meta.bg && typeof d.meta.bg === 'object' ? d.meta.bg : {};
+          d.meta.bg[dev] = url;
+          d.meta.bgTs = Date.now(); d.meta.updatedAt = Date.now();
+        });
         return res.status(200).json({ ok: true, url });
       }
 
@@ -330,7 +335,7 @@ module.exports = async function handler(req, res) {
           if (m.maxUsers !== undefined) d.meta.maxUsers = Math.min(500, Math.max(2, parseInt(m.maxUsers, 10) || 50));
           if (m.ttlHours !== undefined) d.meta.ttlHours = Math.min(24 * 30, Math.max(1, parseInt(m.ttlHours, 10) || 48));
           if (m.dmTtlHours !== undefined) d.meta.dmTtlHours = Math.min(24 * 30, Math.max(1, parseInt(m.dmTtlHours, 10) || 48));
-          if (m.bg !== undefined && typeof m.bg === 'string' && (m.bg === '' || /^https?:\/\//i.test(m.bg))) d.meta.bg = m.bg.slice(0, 700);
+          /* el fondo ya no va por URL suelta: se sube con op 'bgUpload' por dispositivo */
           if (Array.isArray(m.rooms)) {
             const limpias = m.rooms.filter(r => r && typeof r.id === 'string' && typeof r.name === 'string')
               .map(r => ({ id: r.id.replace(/[^\w-]/g, '').slice(0, 30) || ('sala' + Math.random().toString(36).slice(2, 6)), name: r.name.slice(0, 60) }));
@@ -339,6 +344,16 @@ module.exports = async function handler(req, res) {
           d.meta.updatedAt = Date.now();
         });
         return res.status(200).json({ ok: true, meta: db.meta, rooms: db.rooms });
+      }
+
+      if (op === 'bgClear') {
+        if (!keyOk) return res.status(403).json({ ok: false, error: 'solo el administrador' });
+        const dev = ['movil', 'tablet', 'pc'].includes(b.dev) ? b.dev : null;
+        await dbWrite(tk, d => {
+          if (d.meta.bg && typeof d.meta.bg === 'object') { if (dev) delete d.meta.bg[dev]; else d.meta.bg = {}; } else d.meta.bg = {};
+          d.meta.bgTs = Date.now(); d.meta.updatedAt = Date.now();
+        });
+        return res.status(200).json({ ok: true, meta: db.meta });
       }
 
       return res.status(400).json({ ok: false, error: 'op desconocida' });
