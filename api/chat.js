@@ -301,6 +301,28 @@ module.exports = async function handler(req, res) {
         return res.status(200).json({ ok: true, changed: out });
       }
 
+      /* ═══ 🖼 fondo del chat SUBIDO (solo admin): la imagen viene en base64,
+            la guardamos como archivo del repo (assets/chat-bg.jpg) y el meta
+            apunta a su URL pública; bgTs marca la versión para que los que
+            tengan override LOCAL vean que cambiaste la imagen oficial      ═══ */
+      if (op === 'bgUpload') {
+        if (!keyOk) return res.status(403).json({ ok: false, error: 'solo el administrador' });
+        const dataUrl = String(b.dataUrl || '');
+        const m2 = dataUrl.match(/^data:image\/(jpeg|jpg|png|webp);base64,([A-Za-z0-9+/=]+)$/i);
+        if (!m2) return res.status(400).json({ ok: false, error: 'imagen no válida (usa jpg/png/webp)' });
+        const bytes = Buffer.from(m2[2], 'base64');
+        if (bytes.length > 2_500_000) return res.status(413).json({ ok: false, error: 'la imagen pasa de 2,5 MB — recórtala un poco' });
+        const ext = m2[1] === 'png' ? 'png' : (m2[1] === 'webp' ? 'webp' : 'jpg');
+        const filePath = `assets/chat-bg.${ext}`;
+        const old = await gh(tk, 'GET', `/repos/${REPO}/contents/${filePath}?ref=${BRANCH}`);
+        await gh(tk, 'PUT', `/repos/${REPO}/contents/${filePath}`, {
+          message: '🖼 fondo del chat', branch: BRANCH, content: toB64(m2[2]), ...(old ? { sha: old.sha } : {}),
+        });
+        const url = `https://x.yapido.click/${filePath}?v=${Date.now()}`;
+        await dbWrite(tk, d => { d.meta.bg = url; d.meta.bgTs = Date.now(); d.meta.updatedAt = Date.now(); });
+        return res.status(200).json({ ok: true, url });
+      }
+
       if (op === 'meta') {
         if (!keyOk) return res.status(403).json({ ok: false, error: 'solo el administrador' });
         const m = b.meta || {};
