@@ -2,25 +2,26 @@
    💬 CHAT X·STREAM — servidor propio (sin Firebase, sin terceros)
    Vercel serverless + el repo de GitHub como almacén.
 
-   Modelo de concurrencia (clave): leer → mutar → escribir; si otro
-   escribió en medio (409/422 de sha), se relee, se RE-APLICA la
-   mutación sobre la base fresca y se reintenta. Los mensajes nunca
-   se pierden entre sí. Purga por TTL configurable en cada escritura.
+   Modelo de concurrencia: leer → mutar → escribir; ante choque de sha
+   (dos escrituras a la vez), se relee, se re-aplica y se reintenta.
 
-     GET  ?op=state&after=<id>&room=<id>&me=<uid>  → msgs+dms nuevos, presence, meta, favs
+   Autenticación de admin: firma ECDSA del propio dispositivo admin
+   (la misma clave con la que publicas el catálogo — la clave pública
+   está embebida aquí). Cero tokens compartidos.
+
+     GET  ?op=state&after=<id>&room=<id>&me=<uid>  → msgs+dms nuevos, presence, meta
      GET  ?op=presence                             → usuarios en línea
      GET  ?op=dm-list&me=<uid>                     → bandeja de privados
      GET  ?op=unfurl&url=<u>                       → tarjeta de enlace
      POST { op:'beat', uid, name, role, room }     → presencia + asigna sala
-     POST { op:'sent', room, uid, name, role, text } → mensaje sala
+     POST { op:'sent', room, uid, name, role, text }→ mensaje sala
      POST { op:'dm', to, uid, name, role, text }   → mensaje privado
      POST { op:'fav'|'unfav', uid, msgId }         → ❤ enlaces (persisten)
      POST { op:'favList', uid }                    → mis favoritos
      POST { op:'dmRead', uid, peer }               → marca leídos
-     POST { op:'meta', meta:{...} } + x-chat-key   → ajustes (admin)
+     POST { op:'meta'|'bgUpload'|'bgClear', ..., adminSig } → ajustes
 
-   Env: GH_TOKEN (contents:write del repo) · GH_REPO (opcional)
-        PROP_KEY — misma clave maestra del buzón de propuestas.
+   Env: GH_TOKEN (contents:write del repo).
    ═══════════════════════════════════════════════════════════ */
 'use strict';
 
@@ -28,9 +29,12 @@ const GH_API = 'https://api.github.com';
 const REPO = process.env.GH_REPO || 'Dcardkevein15/pelisfull';
 const BRANCH = 'main';
 const PATH = 'chat.json';
-const MAX_MSGS_KEPT = 400;   /* tope duro incluso antes del TTL */
+const MAX_MSGS_KEPT = 400;
 const MAX_TXT = 2000;
-const ONLINE_MS = 90 * 1000; /* 90 s sin latido = offline */
+const ONLINE_MS = 90 * 1000;
+
+/* 🔐 clave pública del admin (la misma que firma catalog.json) */
+const ADMIN_PUB_B64 = 'MFkwEwYHKoZIzj0CAQYIKoZIzj0DAQcDQgAEkO2b+Vm4MNlm+97FaZdXilRkF8KCr0XfqjhtQ00wc8SCsUAz6zA60rxYqnHuRIY7fNJCL6rCYDP5W5DOaNnorA==';
 
 const toB64 = s => Buffer.from(s, 'utf8').toString('base64');
 const fromB64 = s => Buffer.from(s, 'base64').toString('utf8');
@@ -49,18 +53,34 @@ async function gh(tk, method, path, body) {
   return j;
 }
 
+/* ═══ verificación de firma del administrador ═══ */
+function canonicalJson(v) {
+  if (Array.isArray(v)) return '[' + v.map(canonicalJson).join(',') + ']';
+  if (v && typeof v === 'object') return '{' + Object.keys(v).sort().map(k => JSON.stringify(k) + ':' + canonicalJson(v[k])).join(',') + '}';
+  return JSON.stringify(v === undefined ? null : v);
+}
+async function isAdminSig(sigB64, when) {
+  /* el cliente firma "xstream-chat-admin:<hora-epoch-redondeada-a-la-hora>" */
+  try {
+    const key = await crypto.subtle.importKey('spki', Buffer.from(ADMIN_PUB_B64, 'base64'), { name: 'ECDSA', namedCurve: 'P-256' }, false, ['verify']);
+    const sig = Buffer.from(String(sigB64 || ''), 'base64');
+    const hora = Math.floor(Date.now() / 3600000);
+    for (const h of [hora, hora - 1]) {
+      const data = new TextEncoder().encode('xstream-chat-admin:' + h);
+      if (await crypto.subtle.verify({ name: 'ECDSA', hash: 'SHA-256' }, key, sig, data)) return true;
+    }
+  } catch (e) { }
+  return false;
+}
+
 function blankDb() {
   return {
-    meta: { maxUsers: 50, ttlHours: 48, dmTtlHours: 48, bg: '', updatedAt: Date.now() },
-    msgs: [],          /* {id, room, uid, name, role, text, ts}            */
-    dms: [],           /* {id, from, to, name, role, text, ts, read}       */
-    presence: {},      /* uid → {name, role, room, ts}                     */
-    favs: {},          /* uid → [{msgId, snap, at}]  (❤ sobreviven al TTL) */
+    meta: { maxUsers: 50, ttlHours: 48, dmTtlHours: 48, bg: {}, bgTs: 0, updatedAt: Date.now() },
+    msgs: [], dms: [], presence: {}, favs: {},
     rooms: [{ id: 'general', name: '🏠 General' }],
     roomSeq: 1,
   };
 }
-
 async function dbRead(tk) {
   const f = await gh(tk, 'GET', `/repos/${REPO}/contents/${PATH}?ref=${BRANCH}&t=${Date.now()}`);
   if (!f) return { db: blankDb(), sha: null };
@@ -71,9 +91,6 @@ async function dbRead(tk) {
   if (!Array.isArray(db.rooms) || !db.rooms.length) db.rooms = blank.rooms;
   return { db, sha: f.sha };
 }
-
-/* escribe; si alguien escribió antes (sha viejo → 409/422), relee,
-   RE-APLICA la misma mutación sobre la base nueva y reintenta         */
 async function dbWrite(tk, mutate) {
   for (let i = 1; i <= 3; i++) {
     const { db, sha } = await dbRead(tk);
@@ -87,12 +104,10 @@ async function dbWrite(tk, mutate) {
       return { db, out };
     } catch (e) {
       if (e.status !== 409 && e.status !== 422) throw e;
-      /* vuelta al inicio del bucle con base fresca */
     }
   }
   throw new Error('no se pudo guardar (demasiada concurrencia)');
 }
-
 function purge(db) {
   const now = Date.now();
   const msgTtl = (db.meta.ttlHours || 48) * 3600e3;
@@ -103,16 +118,12 @@ function purge(db) {
   if (db.dms.length > MAX_MSGS_KEPT) db.dms = db.dms.slice(-MAX_MSGS_KEPT);
   return db;
 }
-
 function onlineList(db) {
   const now = Date.now();
   return Object.entries(db.presence || {})
     .filter(([, p]) => now - p.ts < ONLINE_MS)
     .map(([uid, p]) => ({ uid, name: p.name, role: p.role || 'user', room: p.room, ts: p.ts }));
 }
-
-/* sala para un latido nuevo: la preferida si hay hueco, si no la primera
-   con cupo; si todas llenas, se CREA otra («Sala N») automáticamente      */
 function pickRoom(db, preferRoom) {
   const list = onlineList(db);
   const count = id => list.filter(p => p.room === id).length;
@@ -128,20 +139,20 @@ function pickRoom(db, preferRoom) {
 module.exports = async function handler(req, res) {
   res.setHeader('Access-Control-Allow-Origin', '*');
   res.setHeader('Access-Control-Allow-Methods', 'GET,POST,OPTIONS');
-  res.setHeader('Access-Control-Allow-Headers', 'content-type,x-chat-key');
+  res.setHeader('Access-Control-Allow-Headers', 'content-type,x-chat-sig,x-chat-ts');
   res.setHeader('Cache-Control', 'no-store');
   if (req.method === 'OPTIONS') return res.status(204).end();
 
   const tk = process.env.GH_TOKEN;
   if (!tk) return res.status(500).json({ ok: false, error: 'falta GH_TOKEN en Vercel' });
-  const keyOk = (req.headers['x-chat-key'] || '') && (req.headers['x-chat-key'] === (process.env.PROP_KEY || ''));
+  /* admin = firma ECDSA de la hora actual con tu clave privada de publicación */
+  const adminOk = () => isAdminSig(req.headers['x-chat-sig'], Date.now());
 
   try {
     /* ═══════════ GET ═══════════ */
     if (req.method === 'GET') {
       const op = String(req.query.op || 'state');
 
-      /* tarjeta de enlace — se resuelve en el servidor (sin problemas de CORS) */
       if (op === 'unfurl') {
         const url = String(req.query.url || '');
         if (!/^https?:\/\//i.test(url) || url.length > 2048) return res.status(400).json({ ok: false, error: 'url' });
@@ -184,7 +195,6 @@ module.exports = async function handler(req, res) {
           if (m.ts >= t.lastTs) { t.lastTs = m.ts; t.lastText = m.text.slice(0, 80); }
           if (m.to === me && !m.read) t.unread++;
         }
-        /* nombre visible del compañero: el último que escribió, o su presencia */
         for (const t of Object.values(threads)) {
           const ult = db.dms.filter(m => (m.from === t.peer && m.to === me) || (m.from === me && m.to === t.peer))
             .sort((a, b) => b.ts - a.ts)[0];
@@ -194,7 +204,7 @@ module.exports = async function handler(req, res) {
         return res.status(200).json({ ok: true, threads: Object.values(threads).sort((a, b) => b.lastTs - a.lastTs) });
       }
 
-      /* op=state: el pull continuo de la sala */
+      /* op=state */
       const after = String(req.query.after || '0');
       const me = String(req.query.me || '');
       const room = String(req.query.room || 'general');
@@ -218,7 +228,6 @@ module.exports = async function handler(req, res) {
       const b = req.body || {};
       const op = String(b.op || 'sent');
 
-      /* latido: registra presencia y resuelve la sala asignada */
       if (op === 'beat') {
         const uid = String(b.uid || '');
         if (!uidOk(uid)) return res.status(400).json({ ok: false, error: 'uid' });
@@ -231,10 +240,7 @@ module.exports = async function handler(req, res) {
             room = pickRoom(d, room);
           }
           d.presence[uid] = { name: String(b.name || (prev && prev.name) || 'Anónimo').slice(0, 60), role, room, ts: Date.now() };
-          return room;
         });
-        /* la sala elegida sale en la respuesta; el llamador leyó db.result? no:
-           dbWrite devuelve {db, out} — el out es el return del mutate        */
         return res.status(200).json({ ok: true, room: db.presence[uid].room, meta: db.meta, rooms: db.rooms });
       }
 
@@ -271,10 +277,7 @@ module.exports = async function handler(req, res) {
             if (!d.favs[uid].some(f => f.msgId === msgId)) {
               const all = d.msgs.concat(d.dms);
               const orig = all.find(m => m.id === msgId);
-              d.favs[uid].push({
-                msgId, at: Date.now(),
-                snap: orig ? { text: orig.text, name: orig.name, room: orig.room || 'dm', ts: orig.ts } : null,
-              });
+              d.favs[uid].push({ msgId, at: Date.now(), snap: orig ? { text: orig.text, name: orig.name, room: orig.room || 'dm', ts: orig.ts } : null });
             }
           } else {
             d.favs[uid] = d.favs[uid].filter(f => f.msgId !== msgId);
@@ -301,41 +304,13 @@ module.exports = async function handler(req, res) {
         return res.status(200).json({ ok: true, changed: out });
       }
 
-      /* ═══ 🖼 fondo del chat SUBIDO (solo admin): la imagen viene en base64,
-            la guardamos como archivo del repo (assets/chat-bg.jpg) y el meta
-            apunta a su URL pública; bgTs marca la versión para que los que
-            tengan override LOCAL vean que cambiaste la imagen oficial      ═══ */
-      if (op === 'bgUpload') {
-        if (!keyOk) return res.status(403).json({ ok: false, error: 'solo el administrador' });
-        const dev = ['movil', 'tablet', 'pc'].includes(b.dev) ? b.dev : null;
-        if (!dev) return res.status(400).json({ ok: false, error: 'dev: movil | tablet | pc' });
-        const dataUrl = String(b.dataUrl || '');
-        const m2 = dataUrl.match(/^data:image\/(jpeg|jpg|png|webp);base64,([A-Za-z0-9+/=]+)$/i);
-        if (!m2) return res.status(400).json({ ok: false, error: 'imagen no válida (usa jpg/png/webp)' });
-        const bytes = Buffer.from(m2[2], 'base64');
-        if (bytes.length > 2_500_000) return res.status(413).json({ ok: false, error: 'la imagen pasa de 2,5 MB — recórtala un poco' });
-        const filePath = `assets/chat-bg-${dev}.jpg`;
-        const old = await gh(tk, 'GET', `/repos/${REPO}/contents/${filePath}?ref=${BRANCH}`);
-        await gh(tk, 'PUT', `/repos/${REPO}/contents/${filePath}`, {
-          message: `🖼 fondo chat ${dev}`, branch: BRANCH, content: m2[2], ...(old ? { sha: old.sha } : {}),
-        });
-        const url = `https://x.yapido.click/${filePath}?v=${Date.now()}`;
-        await dbWrite(tk, d => {
-          d.meta.bg = d.meta.bg && typeof d.meta.bg === 'object' ? d.meta.bg : {};
-          d.meta.bg[dev] = url;
-          d.meta.bgTs = Date.now(); d.meta.updatedAt = Date.now();
-        });
-        return res.status(200).json({ ok: true, url });
-      }
-
       if (op === 'meta') {
-        if (!keyOk) return res.status(403).json({ ok: false, error: 'solo el administrador' });
+        if (!(await adminOk())) return res.status(403).json({ ok: false, error: 'solo el administrador' });
         const m = b.meta || {};
         const { db } = await dbWrite(tk, d => {
           if (m.maxUsers !== undefined) d.meta.maxUsers = Math.min(500, Math.max(2, parseInt(m.maxUsers, 10) || 50));
           if (m.ttlHours !== undefined) d.meta.ttlHours = Math.min(24 * 30, Math.max(1, parseInt(m.ttlHours, 10) || 48));
           if (m.dmTtlHours !== undefined) d.meta.dmTtlHours = Math.min(24 * 30, Math.max(1, parseInt(m.dmTtlHours, 10) || 48));
-          /* el fondo ya no va por URL suelta: se sube con op 'bgUpload' por dispositivo */
           if (Array.isArray(m.rooms)) {
             const limpias = m.rooms.filter(r => r && typeof r.id === 'string' && typeof r.name === 'string')
               .map(r => ({ id: r.id.replace(/[^\w-]/g, '').slice(0, 30) || ('sala' + Math.random().toString(36).slice(2, 6)), name: r.name.slice(0, 60) }));
@@ -346,10 +321,34 @@ module.exports = async function handler(req, res) {
         return res.status(200).json({ ok: true, meta: db.meta, rooms: db.rooms });
       }
 
-      if (op === 'bgClear') {
-        if (!keyOk) return res.status(403).json({ ok: false, error: 'solo el administrador' });
+      /* subir imagen de fondo oficial por dispositivo (móvil/tablet/pc) */
+      if (op === 'bgUpload') {
+        if (!(await adminOk())) return res.status(403).json({ ok: false, error: 'solo el administrador' });
         const dev = ['movil', 'tablet', 'pc'].includes(b.dev) ? b.dev : null;
-        await dbWrite(tk, d => {
+        if (!dev) return res.status(400).json({ ok: false, error: 'dev: movil | tablet | pc' });
+        const dataUrl = String(b.dataUrl || '');
+        const m2 = dataUrl.match(/^data:image\/(jpeg|jpg|png|webp);base64,([A-Za-z0-9+/=]+)$/i);
+        if (!m2) return res.status(400).json({ ok: false, error: 'imagen no válida (usa jpg/png/webp)' });
+        const bytes = Buffer.from(m2[2], 'base64');
+        if (bytes.length > 2_500_000) return res.status(413).json({ ok: false, error: 'la imagen pasa de 2,5 MB' });
+        const filePath = `assets/chat-bg-${dev}.jpg`;
+        const old = await gh(tk, 'GET', `/repos/${REPO}/contents/${filePath}?ref=${BRANCH}`);
+        await gh(tk, 'PUT', `/repos/${REPO}/contents/${filePath}`, {
+          message: `🖼 fondo chat ${dev}`, branch: BRANCH, content: m2[2], ...(old ? { sha: old.sha } : {}),
+        });
+        const url = `https://raw.githubusercontent.com/${REPO}/${BRANCH}/${filePath}?t=${Date.now()}`;
+        const { db } = await dbWrite(tk, d => {
+          d.meta.bg = d.meta.bg && typeof d.meta.bg === 'object' ? d.meta.bg : {};
+          d.meta.bg[dev] = url;
+          d.meta.bgTs = Date.now(); d.meta.updatedAt = Date.now();
+        });
+        return res.status(200).json({ ok: true, url, meta: db.meta });
+      }
+
+      if (op === 'bgClear') {
+        if (!(await adminOk())) return res.status(403).json({ ok: false, error: 'solo el administrador' });
+        const dev = ['movil', 'tablet', 'pc'].includes(b.dev) ? b.dev : null;
+        const { db } = await dbWrite(tk, d => {
           if (d.meta.bg && typeof d.meta.bg === 'object') { if (dev) delete d.meta.bg[dev]; else d.meta.bg = {}; } else d.meta.bg = {};
           d.meta.bgTs = Date.now(); d.meta.updatedAt = Date.now();
         });
