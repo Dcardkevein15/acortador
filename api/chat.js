@@ -248,12 +248,23 @@ module.exports = async function handler(req, res) {
         const uid = String(b.uid || '');
         if (!uidOk(uid)) return res.status(400).json({ ok: false, error: 'uid' });
         const text = String(b.text || '').slice(0, MAX_TXT).trim();
-        if (!text) return res.status(400).json({ ok: false, error: 'vacío' });
+        const img = String(b.img || '');                       /* 📷 imagen incrustada (URL de assets) */
+        const quote = b.quote && typeof b.quote === 'object' && !Array.isArray(b.quote) ? {
+          id: String(b.quote.id || '').slice(0, 40),
+          name: String(b.quote.name || '').slice(0, 60),
+          text: String(b.quote.text || '').slice(0, 220),
+        } : null;
+        if (!text && !img) return res.status(400).json({ ok: false, error: 'vacío' });
         const name = String(b.name || 'Anónimo').slice(0, 60);
         const role = (b.role === 'admin' || b.role === 'mod') ? b.role : 'user';
         const msg = { id: SHORT_ID(), ts: Date.now(), uid, name, role, text };
+        if (img) msg.img = img.slice(0, 500);
+        if (quote && quote.id && quote.text) msg.quote = quote;
+        /* los silenciados no escriben */
         if (op === 'sent') {
           msg.room = String(b.room || 'general');
+          const { db: chk } = await dbRead(tk);
+          if (chk.muted && chk.muted[uid]) return res.status(403).json({ ok: false, error: 'estás silenciado por el staff' });
           await dbWrite(tk, d => {
             if (!d.rooms.some(r => r.id === msg.room)) msg.room = d.rooms[0].id;
             d.msgs.push(msg);
@@ -263,9 +274,77 @@ module.exports = async function handler(req, res) {
           if (!uidOk(to) || to === uid) return res.status(400).json({ ok: false, error: 'destino inválido' });
           delete msg.room;
           msg.from = uid; msg.to = to; msg.read = false;
+          const { db: chk } = await dbRead(tk);
+          if (chk.muted && chk.muted[uid]) return res.status(403).json({ ok: false, error: 'estás silenciado por el staff' });
           await dbWrite(tk, d => { d.dms.push(msg); });
         }
         return res.status(200).json({ ok: true, id: msg.id });
+      }
+
+      if (op === 'react') {
+        /* reacción emoji: toggle — el mismo usuario quita/pone */
+        const uid = String(b.uid || ''), msgId = String(b.msgId || ''), emoji = String(b.emoji || '').slice(0, 8);
+        if (!uidOk(uid) || !msgId || !emoji) return res.status(400).json({ ok: false, error: 'faltan datos' });
+        await dbWrite(tk, d => {
+          const all = d.msgs.concat(d.dms);
+          const m = all.find(x => x.id === msgId);
+          if (!m) return;
+          m.reactions = (m.reactions && typeof m.reactions === 'object' && !Array.isArray(m.reactions)) ? m.reactions : {};
+          const list = new Set(m.reactions[emoji] || []);
+          if (list.has(uid)) list.delete(uid); else list.add(uid);
+          if (list.size) m.reactions[emoji] = [...list]; else delete m.reactions[emoji];
+        });
+        return res.status(200).json({ ok: true });
+      }
+
+      if (op === 'edit') {
+        /* editar: solo el autor — queda constancia "(editado)" */
+        const uid = String(b.uid || ''), msgId = String(b.msgId || '');
+        const text = String(b.text || '').slice(0, MAX_TXT).trim();
+        if (!uidOk(uid) || !msgId || !text) return res.status(400).json({ ok: false, error: 'faltan datos' });
+        let ok = false;
+        await dbWrite(tk, d => {
+          const all = d.msgs.concat(d.dms);
+          const m = all.find(x => x.id === msgId);
+          if (!m) return;
+          if (m.uid !== uid && m.from !== uid) return;
+          m.text = text; m.edited = Date.now(); ok = true;
+        });
+        if (!ok) return res.status(403).json({ ok: false, error: 'solo su autor puede editarlo' });
+        return res.status(200).json({ ok: true });
+      }
+
+      if (op === 'uploadImg') {
+        /* imagen del mensaje: se guarda como archivo del repo → URL pública */
+        const uid = String(b.uid || '');
+        if (!uidOk(uid)) return res.status(400).json({ ok: false, error: 'uid' });
+        const { db } = await dbRead(tk);
+        if (db.muted && db.muted[uid]) return res.status(403).json({ ok: false, error: 'estás silenciado por el staff' });
+        const dataUrl = String(b.dataUrl || '');
+        const m2 = dataUrl.match(/^data:image\/(jpeg|jpg|png|webp|gif);base64,([A-Za-z0-9+/=]+)$/i);
+        if (!m2) return res.status(400).json({ ok: false, error: 'imagen no válida (jpg/png/webp/gif)' });
+        const bytes = Buffer.from(m2[2], 'base64');
+        if (bytes.length > 1_800_000) return res.status(413).json({ ok: false, error: 'máx 1,8 MB por imagen' });
+        const filePath = `assets/chat-img/${SHORT_ID()}.jpg`;
+        await gh(tk, 'PUT', `/repos/${REPO}/contents/${filePath}`, {
+          message: '💬 imagen del chat', branch: BRANCH, content: m2[2],
+        });
+        const url = `https://raw.githubusercontent.com/${REPO}/${BRANCH}/${filePath}?t=${Date.now()}`;
+        return res.status(200).json({ ok: true, url });
+      }
+
+      if (op === 'mute' || op === 'unmute') {
+        /* silenciar un usuario: solo staff (clave del buzón) o admin (firma) */
+        const isStaff = (req.headers['x-chat-key'] || '') === (process.env.PROP_KEY || '');
+        const isAdmin = await adminOk();
+        if (!isStaff && !isAdmin) return res.status(403).json({ ok: false, error: 'solo el staff puede silenciar' });
+        const target = String(b.uid || '');
+        if (!uidOk(target)) return res.status(400).json({ ok: false, error: 'uid' });
+        await dbWrite(tk, d => {
+          if (op === 'mute') { d.muted = d.muted || {}; d.muted[target] = { by: String(b.by || 'staff').slice(0, 40), at: Date.now() }; }
+          else if (d.muted) delete d.muted[target];
+        });
+        return res.status(200).json({ ok: true });
       }
 
       if (op === 'del') {
