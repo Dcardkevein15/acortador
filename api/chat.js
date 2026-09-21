@@ -335,7 +335,9 @@ module.exports = async function handler(req, res) {
 
       if (op === 'mute' || op === 'unmute') {
         /* silenciar un usuario: solo staff (clave del buzón) o admin (firma) */
-        const isStaff = (req.headers['x-chat-key'] || '') === (process.env.PROP_KEY || '');
+        /* staff: la clave tiene que existir Y coincidir — nunca implícita por estar vacía */
+        const pk = (process.env.PROP_KEY || '');
+        const isStaff = !!pk && pk === (req.headers['x-chat-key'] || '');
         const isAdmin = await adminOk();
         if (!isStaff && !isAdmin) return res.status(403).json({ ok: false, error: 'solo el staff puede silenciar' });
         const target = String(b.uid || '');
@@ -351,7 +353,8 @@ module.exports = async function handler(req, res) {
         /* borrar un mensaje: su autor, el admin (firma) o el staff (clave del buzón) */
         const uid = String(b.uid || ''), msgId = String(b.msgId || '');
         if (!uidOk(uid) || !msgId) return res.status(400).json({ ok: false, error: 'faltan datos' });
-        const isStaff = (req.headers['x-chat-key'] || '') === (process.env.PROP_KEY || '\u0000');
+        const pk = (process.env.PROP_KEY || '');
+        const isStaff = !!pk && pk === (req.headers['x-chat-key'] || '');
         const isAdmin = await adminOk();
         let ok = false;
         await dbWrite(tk, d => {
