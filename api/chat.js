@@ -268,6 +268,27 @@ module.exports = async function handler(req, res) {
         return res.status(200).json({ ok: true, id: msg.id });
       }
 
+      if (op === 'del') {
+        /* borrar un mensaje: su autor, el admin (firma) o el staff (clave del buzón) */
+        const uid = String(b.uid || ''), msgId = String(b.msgId || '');
+        if (!uidOk(uid) || !msgId) return res.status(400).json({ ok: false, error: 'faltan datos' });
+        const isStaff = (req.headers['x-chat-key'] || '') === (process.env.PROP_KEY || '\u0000');
+        const isAdmin = await adminOk();
+        let ok = false;
+        await dbWrite(tk, d => {
+          const all = d.msgs.concat(d.dms);
+          const orig = all.find(m => m.id === msgId);
+          if (!orig) return;
+          const can = isStaff || isAdmin || (orig.uid === uid) || (orig.from === uid);
+          if (!can) return;
+          d.msgs = d.msgs.filter(m => m.id !== msgId);
+          d.dms = d.dms.filter(m => m.id !== msgId);
+          ok = true;
+        });
+        if (!ok) return res.status(403).json({ ok: false, error: 'solo su autor o el staff pueden borrarlo' });
+        return res.status(200).json({ ok: true });
+      }
+
       if (op === 'fav' || op === 'unfav') {
         const uid = String(b.uid || ''), msgId = String(b.msgId || '');
         if (!uidOk(uid) || !msgId) return res.status(400).json({ ok: false, error: 'faltan datos' });
