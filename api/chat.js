@@ -81,39 +81,43 @@ function blankDb() {
     roomSeq: 1,
   };
 }
-async function dbRead(tk) {
-  /* si hay copia en memoria fresca (<7 s), úsala: evita picos de latencia */
-  if (_mem.db && (Date.now() - _mem.at) < MEM_TTL_MS) return { db: _mem.db, sha: _mem.sha };
+async function dbRead(tk, forceFresh) {
+  /* si hay copia en memoria fresca (<7 s), úsala — salvo cuando se pide forzar
+     (para escrituras que requieren el sha al día).                              */
+  if (!forceFresh && _mem.db && (Date.now() - _mem.at) < MEM_TTL_MS) return { db: _mem.db, sha: _mem.sha };
   const f = await gh(tk, 'GET', `/repos/${REPO}/contents/${PATH}?ref=${BRANCH}&t=${Date.now()}`);
   if (!f) return { db: blankDb(), sha: null };
-    let db; try { db = JSON.parse(fromB64(String(f.content || '').replace(/\s+/g, ''))); } catch (e) { db = blankDb(); }
+  let db; try { db = JSON.parse(fromB64(String(f.content || '').replace(/\s+/g, ''))); } catch (e) { db = blankDb(); }
   const blank = blankDb();
   for (const k of Object.keys(blank)) if (db[k] === undefined) db[k] = blank[k];
   db.meta = Object.assign(blank.meta, db.meta || {});
   if (!Array.isArray(db.rooms) || !db.rooms.length) db.rooms = blank.rooms;
-  /* refrescamos la caché caliente solo tras lectura del disco */
   _mem = { at: Date.now(), db, sha: f.sha };
   return { db, sha: f.sha };
 }
 async function dbWrite(tk, mutate) {
-  for (let i = 1; i <= 3; i++) {
-    const { db, sha } = await dbRead(tk);
+  let lastErr = null;
+  for (let i = 1; i <= 5; i++) {                       /* 5 intentos */
+    const { db, sha } = await dbRead(tk, true);        /* 🔑 el sha FRESCO sí o sí */
     purge(db);
-    /* cada escritura sube el contador de revisión: así el cliente sabe qué
-       mensajes CAMBIARON (no solo los nuevos — también editados/reaccionados) */
     db.rev = (db.rev || 0) + 1;
     const out = mutate(db);
     try {
-      await gh(tk, 'PUT', `/repos/${REPO}/contents/${PATH}`, {
+      const resp = await gh(tk, 'PUT', `/repos/${REPO}/contents/${PATH}`, {
         message: '💬 chat', branch: BRANCH, content: toB64(JSON.stringify(db)),
         ...(sha ? { sha } : {}),
       });
+      /* guardamos en memoria la base NUEVA (sha del propio PUT ya es el actual) */
+      _mem = { at: Date.now(), db, sha: (resp && resp.content && resp.content.sha) || sha };
       return { db, out };
     } catch (e) {
+      lastErr = e;
       if (e.status !== 409 && e.status !== 422) throw e;
+      _mem.at = 0;                                     /* cache viejo → próximo intento relee */
+      await new Promise(r => setTimeout(r, 300 * i));  /* respiro creciente entre reintentos */
     }
   }
-  throw new Error('no se pudo guardar (demasiada concurrencia)');
+  throw new Error('no se pudo guardar tras 5 intentos (' + (lastErr && lastErr.message) + ')');
 }
 function purge(db) {
   const now = Date.now();
