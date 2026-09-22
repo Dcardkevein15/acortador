@@ -82,19 +82,26 @@ function blankDb() {
   };
 }
 async function dbRead(tk) {
+  /* si hay copia en memoria fresca (<7 s), úsala: evita picos de latencia */
+  if (_mem.db && (Date.now() - _mem.at) < MEM_TTL_MS) return { db: _mem.db, sha: _mem.sha };
   const f = await gh(tk, 'GET', `/repos/${REPO}/contents/${PATH}?ref=${BRANCH}&t=${Date.now()}`);
   if (!f) return { db: blankDb(), sha: null };
-  let db; try { db = JSON.parse(fromB64(String(f.content || '').replace(/\s+/g, ''))); } catch (e) { db = blankDb(); }
+    let db; try { db = JSON.parse(fromB64(String(f.content || '').replace(/\s+/g, ''))); } catch (e) { db = blankDb(); }
   const blank = blankDb();
   for (const k of Object.keys(blank)) if (db[k] === undefined) db[k] = blank[k];
   db.meta = Object.assign(blank.meta, db.meta || {});
   if (!Array.isArray(db.rooms) || !db.rooms.length) db.rooms = blank.rooms;
+  /* refrescamos la caché caliente solo tras lectura del disco */
+  _mem = { at: Date.now(), db, sha: f.sha };
   return { db, sha: f.sha };
 }
 async function dbWrite(tk, mutate) {
   for (let i = 1; i <= 3; i++) {
     const { db, sha } = await dbRead(tk);
     purge(db);
+    /* cada escritura sube el contador de revisión: así el cliente sabe qué
+       mensajes CAMBIARON (no solo los nuevos — también editados/reaccionados) */
+    db.rev = (db.rev || 0) + 1;
     const out = mutate(db);
     try {
       await gh(tk, 'PUT', `/repos/${REPO}/contents/${PATH}`, {
@@ -135,6 +142,14 @@ function pickRoom(db, preferRoom) {
   db.rooms.push(nueva);
   return nueva.id;
 }
+
+/* la subida al repo puede tardar más que el timeout habitual: damos margen */
+module.exports.config = { maxDuration: 30 };
+
+/* caché caliente de la base del chat por instancia — reduce MUCHO las llamadas
+   a GitHub cuando hay polling frecuente (decenas de usuarios a la vez)       */
+let _mem = { at: 0, db: null, sha: null };
+const MEM_TTL_MS = 7000;
 
 module.exports = async function handler(req, res) {
   res.setHeader('Access-Control-Allow-Origin', '*');
@@ -204,12 +219,26 @@ module.exports = async function handler(req, res) {
         return res.status(200).json({ ok: true, threads: Object.values(threads).sort((a, b) => b.lastTs - a.lastTs) });
       }
 
-      /* op=state */
-      const after = String(req.query.after || '0');
+      /* op=state — dos modos:
+         · rev presente: diferencial por revisión (envidado/editado/reaccionado después de rev)
+         · after (la forma antigua): mensajes con id > after (primera carga) */
       const me = String(req.query.me || '');
       const room = String(req.query.room || 'general');
-      const myDms = me ? db.dms.filter(m => m.from === me || m.to === me).filter(m => m.id > after) : [];
       const favs = me && db.favs[me] ? db.favs[me].map(f => f.msgId) : [];
+      if (req.query.rev !== undefined) {
+        const rev = parseInt(String(req.query.rev), 10) || 0;
+        return res.status(200).json({
+          ok: true, rev: db.rev || 1,
+          msgs: db.msgs.filter(m => (m.rev || 1) > rev),
+          dms: me ? db.dms.filter(m => m.from === me || m.to === me).filter(m => (m.rev || 1) > rev) : [],
+          deleted: (db.deleted || []).filter(d => d.rev > rev).map(d => d.id),
+          presence: onlineList(db),
+          meta: db.meta, rooms: db.rooms, myFavs: favs,
+          now: Date.now(), room,
+        });
+      }
+      const after = String(req.query.after || '0');
+      const myDms = me ? db.dms.filter(m => m.from === me || m.to === me).filter(m => m.id > after) : [];
       return res.status(200).json({
         ok: true,
         msgs: db.msgs.filter(m => m.id > after),
@@ -217,6 +246,7 @@ module.exports = async function handler(req, res) {
         presence: onlineList(db),
         meta: db.meta, rooms: db.rooms,
         myFavs: favs,
+        rev: db.rev || 1,
         last: db.msgs.length ? db.msgs[db.msgs.length - 1].id : after,
         lastDm: db.dms.length ? db.dms[db.dms.length - 1].id : after,
         now: Date.now(), room,
@@ -267,6 +297,7 @@ module.exports = async function handler(req, res) {
           if (chk.muted && chk.muted[uid]) return res.status(403).json({ ok: false, error: 'estás silenciado por el staff' });
           await dbWrite(tk, d => {
             if (!d.rooms.some(r => r.id === msg.room)) msg.room = d.rooms[0].id;
+            msg.rev = d.rev;   /* lleva la versión: el poller la usa para diff */
             d.msgs.push(msg);
           });
         } else {
@@ -276,7 +307,7 @@ module.exports = async function handler(req, res) {
           msg.from = uid; msg.to = to; msg.read = false;
           const { db: chk } = await dbRead(tk);
           if (chk.muted && chk.muted[uid]) return res.status(403).json({ ok: false, error: 'estás silenciado por el staff' });
-          await dbWrite(tk, d => { d.dms.push(msg); });
+          await dbWrite(tk, d => { msg.rev = d.rev; d.dms.push(msg); });
         }
         return res.status(200).json({ ok: true, id: msg.id });
       }
@@ -285,6 +316,7 @@ module.exports = async function handler(req, res) {
         /* reacción emoji: toggle — el mismo usuario quita/pone */
         const uid = String(b.uid || ''), msgId = String(b.msgId || ''), emoji = String(b.emoji || '').slice(0, 8);
         if (!uidOk(uid) || !msgId || !emoji) return res.status(400).json({ ok: false, error: 'faltan datos' });
+        let out = null;
         await dbWrite(tk, d => {
           const all = d.msgs.concat(d.dms);
           const m = all.find(x => x.id === msgId);
@@ -293,8 +325,10 @@ module.exports = async function handler(req, res) {
           const list = new Set(m.reactions[emoji] || []);
           if (list.has(uid)) list.delete(uid); else list.add(uid);
           if (list.size) m.reactions[emoji] = [...list]; else delete m.reactions[emoji];
+          m.rev = d.rev;       /* marca el cambio para el polling por rev */
+          out = m.reactions;
         });
-        return res.status(200).json({ ok: true });
+        return res.status(200).json({ ok: true, reactions: out });
       }
 
       if (op === 'edit') {
@@ -303,15 +337,18 @@ module.exports = async function handler(req, res) {
         const text = String(b.text || '').slice(0, MAX_TXT).trim();
         if (!uidOk(uid) || !msgId || !text) return res.status(400).json({ ok: false, error: 'faltan datos' });
         let ok = false;
+        let updated = null;
         await dbWrite(tk, d => {
           const all = d.msgs.concat(d.dms);
           const m = all.find(x => x.id === msgId);
           if (!m) return;
           if (m.uid !== uid && m.from !== uid) return;
-          m.text = text; m.edited = Date.now(); ok = true;
+          m.text = text; m.edited = Date.now();
+          m.rev = d.rev;   /* el cambio viaja en el próximo poll a todos */
+          ok = true; updated = m;
         });
         if (!ok) return res.status(403).json({ ok: false, error: 'solo su autor puede editarlo' });
-        return res.status(200).json({ ok: true });
+        return res.status(200).json({ ok: true, msg: updated });
       }
 
       if (op === 'uploadImg') {
@@ -365,6 +402,10 @@ module.exports = async function handler(req, res) {
           if (!can) return;
           d.msgs = d.msgs.filter(m => m.id !== msgId);
           d.dms = d.dms.filter(m => m.id !== msgId);
+          /* que el cliente lo quite al instante también */
+          d.deleted = d.deleted || [];
+          d.deleted.push({ id: msgId, rev: d.rev });
+          if (d.deleted.length > 200) d.deleted = d.deleted.slice(-200);
           ok = true;
         });
         if (!ok) return res.status(403).json({ ok: false, error: 'solo su autor o el staff pueden borrarlo' });
