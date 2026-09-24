@@ -1,6 +1,10 @@
 /* ═══════════════════════════════════════════════════════════
    💬 CHAT X·STREAM — servidor propio (sin Firebase, sin terceros)
-   Vercel serverless + el repo de GitHub como almacén.
+   Vercel serverless + el repo de GitHub como almacén… PERO en la
+   rama "chat-data": antes cada latido/mensaje escribía "main" y la
+   web entera se REDEDESPLEGABA cada 1-2 min (tormenta de builds que
+   quemaba la cuota, hacía bailar versiones y tumbó el sitemap).
+   Ahora "main" queda congelado salvo que publiques cambios reales.
 
    Modelo de concurrencia: leer → mutar → escribir; ante choque de sha
    (dos escrituras a la vez), se relee, se re-aplica y se reintenta.
@@ -27,11 +31,22 @@
 
 const GH_API = 'https://api.github.com';
 const REPO = process.env.GH_REPO || 'Dcardkevein15/pelisfull';
-const BRANCH = 'main';
 const PATH = 'chat.json';
 const MAX_MSGS_KEPT = 400;
 const MAX_TXT = 2000;
 const ONLINE_MS = 90 * 1000;
+
+/* 🗄 DATA_BRANCH — LA CLAVE DEL ARREGLO ANTI-REDESPLIEGUE:
+   antes, CADA mensaje/latido del chat hacía un commit en "main" (donde vive
+   la web) → Vercel y GitHub Pages REDEDESPLEGABAN la página completa cada
+   1-2 minutos (sitemap caído, versiones bailando, cuota quemada).
+   Ahora la base del chat vive en la rama "chat-data", AJENA al sitio:
+   - GitHub Pages solo construye "main" → la web ya no se recrea jamás.
+   - "[skip ci]" en el mensaje → Vercel tampoco gasta preview deploys.
+   El chat sigue igual de instantáneo para los usuarios; lo que cambia es
+   que cada "💬 chat" ya no reconstruye la página entera.                */
+const DATA_BRANCH = 'chat-data';
+const SKIP_CI = ' [skip ci]';
 
 /* 🔐 clave pública del admin (la misma que firma catalog.json) */
 const ADMIN_PUB_B64 = 'MFkwEwYHKoZIzj0CAQYIKoZIzj0DAQcDQgAEkO2b+Vm4MNlm+97FaZdXilRkF8KCr0XfqjhtQ00wc8SCsUAz6zA60rxYqnHuRIY7fNJCL6rCYDP5W5DOaNnorA==';
@@ -85,7 +100,7 @@ async function dbRead(tk, forceFresh) {
   /* si hay copia en memoria fresca (<7 s), úsala — salvo cuando se pide forzar
      (para escrituras que requieren el sha al día).                              */
   if (!forceFresh && _mem.db && (Date.now() - _mem.at) < MEM_TTL_MS) return { db: _mem.db, sha: _mem.sha };
-  const f = await gh(tk, 'GET', `/repos/${REPO}/contents/${PATH}?ref=${BRANCH}&t=${Date.now()}`);
+  const f = await gh(tk, 'GET', `/repos/${REPO}/contents/${PATH}?ref=${DATA_BRANCH}&t=${Date.now()}`);
   if (!f) return { db: blankDb(), sha: null };
   let db; try { db = JSON.parse(fromB64(String(f.content || '').replace(/\s+/g, ''))); } catch (e) { db = blankDb(); }
   const blank = blankDb();
@@ -104,7 +119,7 @@ async function dbWrite(tk, mutate) {
     const out = mutate(db);
     try {
       const resp = await gh(tk, 'PUT', `/repos/${REPO}/contents/${PATH}`, {
-        message: '💬 chat', branch: BRANCH, content: toB64(JSON.stringify(db)),
+        message: '💬 chat' + SKIP_CI, branch: DATA_BRANCH, content: toB64(JSON.stringify(db)),
         ...(sha ? { sha } : {}),
       });
       /* guardamos en memoria la base NUEVA (sha del propio PUT ya es el actual) */
@@ -130,8 +145,14 @@ function purge(db) {
   return db;
 }
 function onlineList(db) {
+  /* 💡 la presencia vive SOLO en memoria de la instancia (ver beat):
+     antes cada latido de cada usuario escribía el repo entero — ese era
+     el grueso del spam de commits. La lista se reconstruye sola en cada
+     llamada; los "fantasmas" caducan a los ONLINE_MS como siempre.
+     (db se conserva como parámetro por compatibilidad con llamadas viejas) */
   const now = Date.now();
-  return Object.entries(db.presence || {})
+  for (const [u, p] of Object.entries(_presence)) if (now - p.ts >= ONLINE_MS * 4) delete _presence[u];
+  return Object.entries(_presence)
     .filter(([, p]) => now - p.ts < ONLINE_MS)
     .map(([uid, p]) => ({ uid, name: p.name, role: p.role || 'user', room: p.room, ts: p.ts }));
 }
@@ -154,6 +175,13 @@ module.exports.config = { maxDuration: 30 };
    a GitHub cuando hay polling frecuente (decenas de usuarios a la vez)       */
 let _mem = { at: 0, db: null, sha: null };
 const MEM_TTL_MS = 7000;
+
+/* 👻 presencia SOLO en memoria: quién está en línea es efímero por naturaleza
+   (caduca a los 90 s). Antes cada beat de cada usuario = 1 commit al repo =
+   1 redespliegue de la web. Ahora: cero escrituras por latido. Compromiso
+   aceptado: tras un arranque en frío la lista puede tardar unos segundos en
+   reflejar a todos (cada cliente hace su propio beat y aparece solo).      */
+let _presence = {}; /* uid → { name, role, room, ts } */
 
 module.exports = async function handler(req, res) {
   res.setHeader('Access-Control-Allow-Origin', '*');
@@ -217,7 +245,7 @@ module.exports = async function handler(req, res) {
         for (const t of Object.values(threads)) {
           const ult = db.dms.filter(m => (m.from === t.peer && m.to === me) || (m.from === me && m.to === t.peer))
             .sort((a, b) => b.ts - a.ts)[0];
-          const p = (db.presence || {})[t.peer];
+          const p = _presence[t.peer];
           t.peerName = (p && p.name) || (ult && ult.from === t.peer ? ult.name : '') || t.peer;
         }
         return res.status(200).json({ ok: true, threads: Object.values(threads).sort((a, b) => b.lastTs - a.lastTs) });
@@ -265,17 +293,24 @@ module.exports = async function handler(req, res) {
       if (op === 'beat') {
         const uid = String(b.uid || '');
         if (!uidOk(uid)) return res.status(400).json({ ok: false, error: 'uid' });
-        const { db } = await dbWrite(tk, d => {
-          const prev = d.presence[uid];
-          const role = (b.role === 'admin' || b.role === 'mod') ? b.role : (prev && ['admin', 'mod'].includes(prev.role) ? prev.role : 'user');
-          let room = String(b.room || (prev && prev.room) || '');
-          if (!room || !d.rooms.some(r => r.id === room)
-            || (onlineList(d).filter(p => p.room === room).length >= (d.meta.maxUsers || 50) && room !== (prev && prev.room))) {
-            room = pickRoom(d, room);
-          }
-          d.presence[uid] = { name: String(b.name || (prev && prev.name) || 'Anónimo').slice(0, 60), role, room, ts: Date.now() };
-        });
-        return res.status(200).json({ ok: true, room: db.presence[uid].room, meta: db.meta, rooms: db.rooms });
+        /* presencia en MEMORIA (sin escribir repo). Solo se persiste si hay
+           que CREAR una sala nueva — un cambio estructural, no un latido   */
+        const { db } = await dbRead(tk);
+        const prev = _presence[uid];
+        const role = (b.role === 'admin' || b.role === 'mod') ? b.role : (prev && ['admin', 'mod'].includes(prev.role) ? prev.role : 'user');
+        let room = String(b.room || (prev && prev.room) || '');
+        const salasAntes = db.rooms.length;
+        if (!room || !db.rooms.some(r => r.id === room)
+          || (onlineList().filter(p => p.room === room).length >= (db.meta.maxUsers || 50) && room !== (prev && prev.room))) {
+          room = pickRoom(db, room);                     /* puede crear sala */
+        }
+        _presence[uid] = { name: String(b.name || (prev && prev.name) || 'Anónimo').slice(0, 60), role, room, ts: Date.now() };
+        if (db.rooms.length > salasAntes) {
+          /* sala nueva creada por demanda → persistir SOLO la estructura */
+          const roomsNuevas = db.rooms, seqNuevo = db.roomSeq;
+          await dbWrite(tk, d => { d.rooms = roomsNuevas; d.roomSeq = seqNuevo; });
+        }
+        return res.status(200).json({ ok: true, room, meta: db.meta, rooms: db.rooms });
       }
 
       if (op === 'sent' || op === 'dm') {
@@ -368,9 +403,9 @@ module.exports = async function handler(req, res) {
         if (bytes.length > 1_800_000) return res.status(413).json({ ok: false, error: 'máx 1,8 MB por imagen' });
         const filePath = `assets/chat-img/${SHORT_ID()}.jpg`;
         await gh(tk, 'PUT', `/repos/${REPO}/contents/${filePath}`, {
-          message: '💬 imagen del chat', branch: BRANCH, content: m2[2],
+          message: '💬 imagen del chat' + SKIP_CI, branch: DATA_BRANCH, content: m2[2],
         });
-        const url = `https://raw.githubusercontent.com/${REPO}/${BRANCH}/${filePath}?t=${Date.now()}`;
+        const url = `https://raw.githubusercontent.com/${REPO}/${DATA_BRANCH}/${filePath}?t=${Date.now()}`;
         return res.status(200).json({ ok: true, url });
       }
 
@@ -480,11 +515,11 @@ module.exports = async function handler(req, res) {
         const bytes = Buffer.from(m2[2], 'base64');
         if (bytes.length > 2_500_000) return res.status(413).json({ ok: false, error: 'la imagen pasa de 2,5 MB' });
         const filePath = `assets/chat-bg-${dev}.jpg`;
-        const old = await gh(tk, 'GET', `/repos/${REPO}/contents/${filePath}?ref=${BRANCH}`);
+        const old = await gh(tk, 'GET', `/repos/${REPO}/contents/${filePath}?ref=${DATA_BRANCH}`);
         await gh(tk, 'PUT', `/repos/${REPO}/contents/${filePath}`, {
-          message: `🖼 fondo chat ${dev}`, branch: BRANCH, content: m2[2], ...(old ? { sha: old.sha } : {}),
+          message: `🖼 fondo chat ${dev}` + SKIP_CI, branch: DATA_BRANCH, content: m2[2], ...(old ? { sha: old.sha } : {}),
         });
-        const url = `https://raw.githubusercontent.com/${REPO}/${BRANCH}/${filePath}?t=${Date.now()}`;
+        const url = `https://raw.githubusercontent.com/${REPO}/${DATA_BRANCH}/${filePath}?t=${Date.now()}`;
         const { db } = await dbWrite(tk, d => {
           d.meta.bg = d.meta.bg && typeof d.meta.bg === 'object' ? d.meta.bg : {};
           d.meta.bg[dev] = url;
